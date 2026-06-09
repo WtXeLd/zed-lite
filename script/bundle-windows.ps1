@@ -29,7 +29,6 @@ $Architecture = if ($Architecture) {
 }
 
 $target = "$Architecture-pc-windows-msvc"
-$CargoOutDir = "./target/$target/release"
 
 function Get-VSArch {
     param([string]$Arch)
@@ -60,7 +59,9 @@ function BuildZedLite {
 }
 
 function PackageZedLite {
-    $packageRoot = "$env:ZED_WORKSPACE\target\zed-lite-windows-$Architecture"
+    $targetRoot = $env:CARGO_TARGET_DIR ? $env:CARGO_TARGET_DIR : "$env:ZED_WORKSPACE\target"
+    $cargoOutDir = "$targetRoot\$target\release"
+    $packageRoot = "$targetRoot\zed-lite-windows-$Architecture"
 
     if (Test-Path $packageRoot) {
         Remove-Item -Path $packageRoot -Recurse -Force
@@ -69,20 +70,20 @@ function PackageZedLite {
     New-Item -Path $packageRoot -ItemType Directory -Force | Out-Null
     New-Item -Path "$packageRoot\bin" -ItemType Directory -Force | Out-Null
 
-    Copy-Item -Path ".\$CargoOutDir\zed.exe" -Destination "$packageRoot\Zed Lite.exe" -Force
-    Copy-Item -Path ".\$CargoOutDir\cli.exe" -Destination "$packageRoot\bin\zed.exe" -Force
+    Copy-Item -Path "$cargoOutDir\zed.exe" -Destination "$packageRoot\Zed Lite.exe" -Force
+    Copy-Item -Path "$cargoOutDir\cli.exe" -Destination "$packageRoot\bin\zed.exe" -Force
 
-    if (Test-Path ".\$CargoOutDir\conpty.dll") {
-        Copy-Item -Path ".\$CargoOutDir\conpty.dll" -Destination "$packageRoot\conpty.dll" -Force
+    if (Test-Path "$cargoOutDir\conpty.dll") {
+        Copy-Item -Path "$cargoOutDir\conpty.dll" -Destination "$packageRoot\conpty.dll" -Force
     }
 
-    if (Test-Path ".\$CargoOutDir\OpenConsole.exe") {
-        Copy-Item -Path ".\$CargoOutDir\OpenConsole.exe" -Destination "$packageRoot\OpenConsole.exe" -Force
+    if (Test-Path "$cargoOutDir\OpenConsole.exe") {
+        Copy-Item -Path "$cargoOutDir\OpenConsole.exe" -Destination "$packageRoot\OpenConsole.exe" -Force
     }
 
     Copy-Item -Path "$env:ZED_WORKSPACE\assets\licenses.md" -Destination "$packageRoot\licenses.md" -Force
 
-    $archive = "$env:ZED_WORKSPACE\target\zed-lite-windows-$Architecture.zip"
+    $archive = "$targetRoot\zed-lite-windows-$Architecture.zip"
     if (Test-Path $archive) {
         Remove-Item -Path $archive -Force
     }

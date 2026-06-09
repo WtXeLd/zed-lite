@@ -85,8 +85,16 @@ jobs:
   bundle_windows_x86_64:
     name: Windows x86_64
     runs-on: windows-2022
+    env:
+      CARGO_HOME: C:\cargo
+      RUSTUP_HOME: C:\rustup
+      CARGO_TARGET_DIR: D:\t
     steps:
       - uses: actions/checkout@v4
+
+      - name: Configure long paths
+        run: git config --global core.longpaths true
+        shell: pwsh
 
       - name: Build Zed Lite
         run: script/bundle-windows.ps1 -Architecture x86_64
@@ -96,5 +104,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: zed-lite-windows-x86_64
-          path: target/zed-lite-windows-x86_64.zip
+          path: D:\t\zed-lite-windows-x86_64.zip
           if-no-files-found: error
