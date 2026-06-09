@@ -54,7 +54,6 @@ pub struct EditorSettings {
     pub show_signature_help_after_edits: bool,
     pub go_to_definition_fallback: GoToDefinitionFallback,
     pub go_to_definition_scroll_strategy: GoToDefinitionScrollStrategy,
-    pub jupyter: Jupyter,
     pub snippet_sort_order: SnippetSortOrder,
     pub diagnostics_max_severity: Option<DiagnosticSeverity>,
     pub inline_code_actions: bool,
@@ -69,14 +68,6 @@ pub struct EditorSettings {
     pub diff_view_style: DiffViewStyle,
     pub minimum_split_diff_width: f32,
 }
-#[derive(Debug, Clone)]
-pub struct Jupyter {
-    /// Whether the Jupyter feature is enabled.
-    ///
-    /// Default: true
-    pub enabled: bool,
-}
-
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct StickyScroll {
     pub enabled: bool,
@@ -87,7 +78,6 @@ pub struct Toolbar {
     pub breadcrumbs: bool,
     pub quick_actions: bool,
     pub selections_menu: bool,
-    pub agent_review: bool,
     pub code_actions: bool,
 }
 
@@ -136,7 +126,6 @@ pub struct Gutter {
     pub min_line_number_digits: usize,
     pub line_numbers: bool,
     pub runnables: bool,
-    pub breakpoints: bool,
     pub bookmarks: bool,
     pub folds: bool,
 }
@@ -186,12 +175,6 @@ pub struct SearchSettings {
     pub center_on_match: bool,
 }
 
-impl EditorSettings {
-    pub fn jupyter_enabled(cx: &App) -> bool {
-        EditorSettings::get_global(cx).jupyter.enabled
-    }
-}
-
 impl Settings for EditorSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         let editor = content.editor.clone();
@@ -218,7 +201,6 @@ impl Settings for EditorSettings {
                 breadcrumbs: toolbar.breadcrumbs.unwrap(),
                 quick_actions: toolbar.quick_actions.unwrap(),
                 selections_menu: toolbar.selections_menu.unwrap(),
-                agent_review: toolbar.agent_review.unwrap(),
                 code_actions: toolbar.code_actions.unwrap(),
             },
             scrollbar: Scrollbar {
@@ -254,7 +236,6 @@ impl Settings for EditorSettings {
                 line_numbers: gutter.line_numbers.unwrap(),
                 runnables: gutter.runnables.unwrap(),
                 bookmarks: gutter.bookmarks.unwrap(),
-                breakpoints: gutter.breakpoints.unwrap(),
                 folds: gutter.folds.unwrap(),
             },
             scroll_beyond_last_line: editor.scroll_beyond_last_line.unwrap(),
@@ -289,9 +270,6 @@ impl Settings for EditorSettings {
             show_signature_help_after_edits: editor.show_signature_help_after_edits.unwrap(),
             go_to_definition_fallback: editor.go_to_definition_fallback.unwrap(),
             go_to_definition_scroll_strategy: editor.go_to_definition_scroll_strategy.unwrap(),
-            jupyter: Jupyter {
-                enabled: editor.jupyter.unwrap().enabled.unwrap(),
-            },
             snippet_sort_order: editor.snippet_sort_order.unwrap(),
             diagnostics_max_severity: editor.diagnostics_max_severity.map(Into::into),
             inline_code_actions: editor.inline_code_actions.unwrap(),

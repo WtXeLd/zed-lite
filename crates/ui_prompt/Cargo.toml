@@ -12,6 +12,8 @@ workspace = true
 path = "src/ui_prompt.rs"
 
 [features]
+lite = []
+test-support = []
 default = []
 
 [dependencies]

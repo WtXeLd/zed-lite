@@ -379,16 +379,6 @@ pub struct InsertSnippet {
 }
 
 actions!(
-    debugger,
-    [
-        /// Runs program execution to the current cursor position.
-        RunToCursor,
-        /// Evaluates the selected text in the debugger context.
-        EvaluateSelectedText
-    ]
-);
-
-actions!(
     go_to_line,
     [
         /// Toggles the go to line dialog.
@@ -400,12 +390,6 @@ actions!(
 actions!(
     editor,
     [
-        /// Accepts the full edit prediction.
-        AcceptEditPrediction,
-        /// Accepts a partial edit prediction.
-        #[action(deprecated_aliases = ["editor::AcceptPartialCopilotSuggestion"])]
-        AcceptNextWordEditPrediction,
-        AcceptNextLineEditPrediction,
         /// Applies all diff hunks in the editor.
         ApplyAllDiffHunks,
         /// Applies the diff hunk at the current position.
@@ -490,8 +474,6 @@ actions!(
         DeleteToEndOfLine,
         /// Diffs the text stored in the clipboard against the current selection.
         DiffClipboardWithSelection,
-        /// Displays names of all active cursors.
-        DisplayCursorNames,
         /// Duplicates the current line below.
         DuplicateLineDown,
         /// Duplicates the current line above.
@@ -677,8 +659,6 @@ actions!(
         NewlineAbove,
         /// Inserts a new line below the current line.
         NewlineBelow,
-        /// Navigates to the next edit prediction.
-        NextEditPrediction,
         /// Scrolls to the next screen.
         NextScreen,
         /// Goes to the next snippet tabstop if one exists.
@@ -716,8 +696,6 @@ actions!(
         PageUp,
         /// Pastes from clipboard.
         Paste,
-        /// Navigates to the previous edit prediction.
-        PreviousEditPrediction,
         /// Goes to the previous snippet tabstop if one exists.
         PreviousSnippetTabstop,
         /// Redoes the last undone edit.
@@ -808,8 +786,6 @@ actions!(
         ShowCompletions,
         /// Shows the system character palette.
         ShowCharacterPalette,
-        /// Shows edit prediction at cursor.
-        ShowEditPrediction,
         /// Shows signature help for the current function.
         ShowSignatureHelp,
         /// Shows word completions.
@@ -836,16 +812,8 @@ actions!(
         Backtab,
         /// Toggles a bookmark at the current line.
         ToggleBookmark,
-        /// Toggles a breakpoint at the current line.
-        ToggleBreakpoint,
         /// Toggles the case of selected text.
         ToggleCase,
-        /// Disables the breakpoint at the current line.
-        DisableBreakpoint,
-        /// Enables the breakpoint at the current line.
-        EnableBreakpoint,
-        /// Edits the log message for a breakpoint.
-        EditLogBreakpoint,
         /// Toggles automatic signature help.
         ToggleAutoSignatureHelp,
         /// Toggles inline git blame display.
@@ -866,8 +834,6 @@ actions!(
         ToggleInlineValues,
         /// Toggles inline diagnostics display.
         ToggleInlineDiagnostics,
-        /// Toggles edit prediction feature.
-        ToggleEditPrediction,
         /// Toggles line numbers display.
         ToggleLineNumbers,
         /// Toggles the minimap display.

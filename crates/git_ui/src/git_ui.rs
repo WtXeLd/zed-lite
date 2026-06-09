@@ -114,32 +114,9 @@ pub fn init(cx: &mut App) {
         workspace.register_action(
             |workspace, action: &zed_actions::OpenWorktreeInNewWindow, window, cx| {
                 let path = action.path.clone();
-                let is_remote = !workspace.project().read(cx).is_local();
-
-                if is_remote {
-                    let connection_options =
-                        workspace.project().read(cx).remote_connection_options(cx);
-                    let app_state = workspace.app_state().clone();
-                    let workspace_handle = workspace.weak_handle();
-                    cx.spawn_in(window, async move |_, cx| {
-                        if let Some(connection_options) = connection_options {
-                            crate::worktree_picker::open_remote_worktree(
-                                connection_options,
-                                vec![path],
-                                app_state,
-                                workspace_handle,
-                                cx,
-                            )
-                            .await?;
-                        }
-                        anyhow::Ok(())
-                    })
+                workspace
+                    .open_workspace_for_paths(OpenMode::NewWindow, vec![path], window, cx)
                     .detach_and_log_err(cx);
-                } else {
-                    workspace
-                        .open_workspace_for_paths(OpenMode::NewWindow, vec![path], window, cx)
-                        .detach_and_log_err(cx);
-                }
             },
         );
 
@@ -147,73 +124,71 @@ pub fn init(cx: &mut App) {
         if project.is_read_only(cx) {
             return;
         }
-        if !project.is_via_collab() {
-            workspace.register_action(
-                |workspace, _: &zed_actions::git::CreatePullRequest, window, cx| {
-                    if let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) {
-                        panel.update(cx, |panel, cx| {
-                            panel.create_pull_request(window, cx);
-                        });
-                    }
-                },
-            );
-            workspace.register_action(|workspace, _: &git::Fetch, window, cx| {
-                let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
-                    return;
-                };
-                panel.update(cx, |panel, cx| {
-                    panel.fetch(true, window, cx);
-                });
+        workspace.register_action(
+            |workspace, _: &zed_actions::git::CreatePullRequest, window, cx| {
+                if let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) {
+                    panel.update(cx, |panel, cx| {
+                        panel.create_pull_request(window, cx);
+                    });
+                }
+            },
+        );
+        workspace.register_action(|workspace, _: &git::Fetch, window, cx| {
+            let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
+                return;
+            };
+            panel.update(cx, |panel, cx| {
+                panel.fetch(true, window, cx);
             });
-            workspace.register_action(|workspace, _: &git::FetchFrom, window, cx| {
-                let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
-                    return;
-                };
-                panel.update(cx, |panel, cx| {
-                    panel.fetch(false, window, cx);
-                });
+        });
+        workspace.register_action(|workspace, _: &git::FetchFrom, window, cx| {
+            let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
+                return;
+            };
+            panel.update(cx, |panel, cx| {
+                panel.fetch(false, window, cx);
             });
-            workspace.register_action(|workspace, _: &git::Push, window, cx| {
-                let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
-                    return;
-                };
-                panel.update(cx, |panel, cx| {
-                    panel.push(false, false, window, cx);
-                });
+        });
+        workspace.register_action(|workspace, _: &git::Push, window, cx| {
+            let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
+                return;
+            };
+            panel.update(cx, |panel, cx| {
+                panel.push(false, false, window, cx);
             });
-            workspace.register_action(|workspace, _: &git::PushTo, window, cx| {
-                let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
-                    return;
-                };
-                panel.update(cx, |panel, cx| {
-                    panel.push(false, true, window, cx);
-                });
+        });
+        workspace.register_action(|workspace, _: &git::PushTo, window, cx| {
+            let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
+                return;
+            };
+            panel.update(cx, |panel, cx| {
+                panel.push(false, true, window, cx);
             });
-            workspace.register_action(|workspace, _: &git::ForcePush, window, cx| {
-                let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
-                    return;
-                };
-                panel.update(cx, |panel, cx| {
-                    panel.push(true, false, window, cx);
-                });
+        });
+        workspace.register_action(|workspace, _: &git::ForcePush, window, cx| {
+            let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
+                return;
+            };
+            panel.update(cx, |panel, cx| {
+                panel.push(true, false, window, cx);
             });
-            workspace.register_action(|workspace, _: &git::Pull, window, cx| {
-                let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
-                    return;
-                };
-                panel.update(cx, |panel, cx| {
-                    panel.pull(false, window, cx);
-                });
+        });
+        workspace.register_action(|workspace, _: &git::Pull, window, cx| {
+            let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
+                return;
+            };
+            panel.update(cx, |panel, cx| {
+                panel.pull(false, window, cx);
             });
-            workspace.register_action(|workspace, _: &git::PullRebase, window, cx| {
-                let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
-                    return;
-                };
-                panel.update(cx, |panel, cx| {
-                    panel.pull(true, window, cx);
-                });
+        });
+        workspace.register_action(|workspace, _: &git::PullRebase, window, cx| {
+            let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
+                return;
+            };
+            panel.update(cx, |panel, cx| {
+                panel.pull(true, window, cx);
             });
-        }
+        });
         workspace.register_action(|workspace, action: &git::StashAll, window, cx| {
             let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
                 return;

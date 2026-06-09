@@ -13,6 +13,7 @@ path = "src/settings.rs"
 doctest = false
 
 [features]
+lite = ["settings_content/lite"]
 test-support = ["gpui/test-support", "fs/test-support"]
 
 [dependencies]

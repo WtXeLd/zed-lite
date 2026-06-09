@@ -10,8 +10,6 @@ use util::{
 
 #[derive(Clone, PartialEq, Eq, RegisterSetting)]
 pub struct WorktreeSettings {
-    /// Whether to prevent this project from being shared in public channels.
-    pub prevent_sharing_in_public_channels: bool,
     pub file_scan_exclusions: PathMatcher,
     pub file_scan_inclusions: PathMatcher,
     /// This field contains all ancestors of the `file_scan_inclusions`. It's used to
@@ -77,7 +75,6 @@ impl Settings for WorktreeSettings {
             .collect();
 
         Self {
-            prevent_sharing_in_public_channels: worktree.prevent_sharing_in_public_channels,
             file_scan_exclusions: path_matchers(file_scan_exclusions, "file_scan_exclusions")
                 .log_err()
                 .unwrap_or_default(),

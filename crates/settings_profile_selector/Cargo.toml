@@ -12,6 +12,10 @@ workspace = true
 path = "src/settings_profile_selector.rs"
 doctest = false
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 fuzzy.workspace = true
 gpui.workspace = true

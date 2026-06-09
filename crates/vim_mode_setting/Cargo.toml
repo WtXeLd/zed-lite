@@ -11,6 +11,10 @@ workspace = true
 [lib]
 path = "src/vim_mode_setting.rs"
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 gpui.workspace = true
 settings.workspace = true

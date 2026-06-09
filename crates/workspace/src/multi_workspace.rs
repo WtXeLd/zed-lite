@@ -7,25 +7,25 @@ use gpui::{
     Window, WindowId, actions, deferred, px,
 };
 pub use project::ProjectGroupKey;
-use project::{DisableAiSettings, Project};
-use remote::RemoteConnectionOptions;
-use settings::Settings;
-pub use settings::SidebarSide;
+use project::Project;
 use std::future::Future;
 
 use std::path::PathBuf;
 use ui::prelude::*;
 use util::ResultExt;
 use util::path_list::PathList;
-use zed_actions::agents_sidebar::ToggleThreadSwitcher;
 
-use agent_settings::AgentSettings;
-use settings::SidebarDockPosition;
 use ui::{ContextMenu, right_click_menu};
 
 const SIDEBAR_RESIZE_HANDLE_SIZE: Pixels = px(6.0);
 
-use crate::open_remote_project_with_existing_connection;
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub enum SidebarSide {
+    #[default]
+    Left,
+    Right,
+}
+
 use crate::{
     CloseIntent, CloseWindow, DockPosition, Event as WorkspaceEvent, Item, ModalView, OpenMode,
     Panel, Workspace, WorkspaceId, client_side_decorations,
@@ -45,12 +45,6 @@ actions!(
         NextProject,
         /// Activates the previous project in the sidebar.
         PreviousProject,
-        /// Activates the next thread in sidebar order.
-        NextThread,
-        /// Activates the previous thread in sidebar order.
-        PreviousThread,
-        /// Creates a new thread in the current workspace.
-        NewThread,
         /// Moves the active project to a new window.
         MoveProjectToNewWindow,
     ]
@@ -64,41 +58,9 @@ pub struct SidebarRenderState {
 
 pub fn sidebar_side_context_menu(
     id: impl Into<ElementId>,
-    cx: &App,
+    _cx: &App,
 ) -> ui::RightClickMenu<ContextMenu> {
-    let current_position = AgentSettings::get_global(cx).sidebar_side;
-    right_click_menu(id).menu(move |window, cx| {
-        let fs = <dyn fs::Fs>::global(cx);
-        ContextMenu::build(window, cx, move |mut menu, _, _cx| {
-            let positions: [(SidebarDockPosition, &str); 2] = [
-                (SidebarDockPosition::Left, "Left"),
-                (SidebarDockPosition::Right, "Right"),
-            ];
-            for (position, label) in positions {
-                let fs = fs.clone();
-                menu = menu.toggleable_entry(
-                    label,
-                    position == current_position,
-                    IconPosition::Start,
-                    None,
-                    move |_window, cx| {
-                        let side = match position {
-                            SidebarDockPosition::Left => "left",
-                            SidebarDockPosition::Right => "right",
-                        };
-                        telemetry::event!("Sidebar Side Changed", side = side);
-                        settings::update_settings_file(fs.clone(), cx, move |settings, _cx| {
-                            settings
-                                .agent
-                                .get_or_insert_default()
-                                .set_sidebar_side(position);
-                        });
-                    },
-                );
-            }
-            menu
-        })
-    })
+    right_click_menu(id).menu(|window, cx| ContextMenu::build(window, cx, |menu, _, _| menu))
 }
 
 pub enum MultiWorkspaceEvent {
@@ -125,20 +87,8 @@ pub trait Sidebar: Focusable + Render + EventEmitter<SidebarEvent> + Sized {
     }
     /// Makes focus reset back to the search editor upon toggling the sidebar from outside
     fn prepare_for_focus(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {}
-    /// Opens or cycles the thread switcher popup.
-    fn toggle_thread_switcher(
-        &mut self,
-        _select_last: bool,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) {
-    }
-
     /// Activates the next or previous project.
     fn cycle_project(&mut self, _forward: bool, _window: &mut Window, _cx: &mut Context<Self>) {}
-
-    /// Activates the next or previous thread in sidebar order.
-    fn cycle_thread(&mut self, _forward: bool, _window: &mut Window, _cx: &mut Context<Self>) {}
 
     /// Return an opaque JSON blob of sidebar-specific state to persist.
     fn serialized_state(&self, _cx: &App) -> Option<String> {
@@ -164,9 +114,7 @@ pub trait SidebarHandle: 'static + Send + Sync {
     fn has_notifications(&self, cx: &App) -> bool;
     fn to_any(&self) -> AnyView;
     fn entity_id(&self) -> EntityId;
-    fn toggle_thread_switcher(&self, select_last: bool, window: &mut Window, cx: &mut App);
     fn cycle_project(&self, forward: bool, window: &mut Window, cx: &mut App);
-    fn cycle_thread(&self, forward: bool, window: &mut Window, cx: &mut App);
 
     fn is_threads_list_view_active(&self, cx: &App) -> bool;
 
@@ -218,29 +166,11 @@ impl<T: Sidebar> SidebarHandle for Entity<T> {
         Entity::entity_id(self)
     }
 
-    fn toggle_thread_switcher(&self, select_last: bool, window: &mut Window, cx: &mut App) {
-        let entity = self.clone();
-        window.defer(cx, move |window, cx| {
-            entity.update(cx, |this, cx| {
-                this.toggle_thread_switcher(select_last, window, cx);
-            });
-        });
-    }
-
     fn cycle_project(&self, forward: bool, window: &mut Window, cx: &mut App) {
         let entity = self.clone();
         window.defer(cx, move |window, cx| {
             entity.update(cx, |this, cx| {
                 this.cycle_project(forward, window, cx);
-            });
-        });
-    }
-
-    fn cycle_thread(&self, forward: bool, window: &mut Window, cx: &mut App) {
-        let entity = self.clone();
-        window.defer(cx, move |window, cx| {
-            entity.update(cx, |this, cx| {
-                this.cycle_thread(forward, window, cx);
             });
         });
     }
@@ -323,18 +253,6 @@ impl MultiWorkspace {
             }
         });
         let quit_subscription = cx.on_app_quit(Self::app_will_quit);
-        let settings_subscription = cx.observe_global_in::<settings::SettingsStore>(window, {
-            let mut previous_multi_workspace_enabled = !DisableAiSettings::get_global(cx)
-                .disable_ai
-                && AgentSettings::get_global(cx).enabled;
-            move |this, window, cx| {
-                let multi_workspace_enabled = this.multi_workspace_enabled(cx);
-                if previous_multi_workspace_enabled && !multi_workspace_enabled {
-                    this.collapse_to_single_workspace(window, cx);
-                }
-                previous_multi_workspace_enabled = multi_workspace_enabled;
-            }
-        });
         Self::subscribe_to_workspace(&workspace, window, cx);
         let weak_self = cx.weak_entity();
         workspace.update(cx, |workspace, cx| {
@@ -350,11 +268,10 @@ impl MultiWorkspace {
             sidebar_overlay: None,
             pending_removal_tasks: Vec::new(),
             _serialize_task: None,
-            _subscriptions: vec![
-                release_subscription,
-                quit_subscription,
-                settings_subscription,
-            ],
+            _subscriptions: {
+                let subscriptions = vec![release_subscription, quit_subscription];
+                subscriptions
+            },
             previous_focus_handle: None,
         }
     }
@@ -398,8 +315,8 @@ impl MultiWorkspace {
             .map_or(false, |s| s.is_threads_list_view_active(cx))
     }
 
-    pub fn multi_workspace_enabled(&self, cx: &App) -> bool {
-        !DisableAiSettings::get_global(cx).disable_ai && AgentSettings::get_global(cx).enabled
+    pub fn multi_workspace_enabled(&self, _cx: &App) -> bool {
+        false
     }
 
     pub fn toggle_sidebar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -564,13 +481,7 @@ impl MultiWorkspace {
             move |this, _project, event, _window, cx| match event {
                 project::Event::WorktreePathsChanged { old_worktree_paths } => {
                     if let Some(workspace) = workspace.upgrade() {
-                        let host = workspace
-                            .read(cx)
-                            .project()
-                            .read(cx)
-                            .remote_connection_options(cx);
-                        let old_key =
-                            ProjectGroupKey::from_worktree_paths(old_worktree_paths, host);
+                        let old_key = ProjectGroupKey::from_worktree_paths(old_worktree_paths);
                         this.handle_project_group_key_change(&workspace, &old_key, cx);
                     }
                 }
@@ -714,26 +625,6 @@ impl MultiWorkspace {
         }
 
         self.retained_workspaces.push(workspace.clone());
-        cx.emit(MultiWorkspaceEvent::WorkspaceAdded(workspace));
-    }
-
-    pub(crate) fn activate_provisional_workspace(
-        &mut self,
-        workspace: Entity<Workspace>,
-        provisional_key: ProjectGroupKey,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if workspace != self.active_workspace {
-            self.register_workspace(&workspace, window, cx);
-        }
-
-        self.ensure_project_group_state(provisional_key);
-        if !self.is_workspace_retained(&workspace) {
-            self.retained_workspaces.push(workspace.clone());
-        }
-
-        self.activate(workspace.clone(), None, window, cx);
         cx.emit(MultiWorkspaceEvent::WorkspaceAdded(workspace));
     }
 
@@ -1118,20 +1009,18 @@ impl MultiWorkspace {
         })
     }
 
-    /// Finds an existing workspace whose root paths and host exactly match.
+    /// Finds an existing workspace whose root paths exactly match.
     pub fn workspace_for_paths(
         &self,
         path_list: &PathList,
-        host: Option<&RemoteConnectionOptions>,
         cx: &App,
     ) -> Option<Entity<Workspace>> {
-        self.workspace_for_paths_excluding(path_list, host, &[], cx)
+        self.workspace_for_paths_excluding(path_list, &[], cx)
     }
 
     fn workspace_for_paths_excluding(
         &self,
         path_list: &PathList,
-        host: Option<&RemoteConnectionOptions>,
         excluding: &[Entity<Workspace>],
         cx: &App,
     ) -> Option<Entity<Workspace>> {
@@ -1140,10 +1029,8 @@ impl MultiWorkspace {
                 continue;
             }
             let root_paths = PathList::new(&workspace.read(cx).root_paths(cx));
-            let key = workspace.read(cx).project_group_key(cx);
-            let host_matches = key.host().as_ref() == host;
             let paths_match = root_paths == *path_list;
-            if host_matches && paths_match {
+            if paths_match {
                 return Some(workspace.clone());
             }
         }
@@ -1151,157 +1038,26 @@ impl MultiWorkspace {
         None
     }
 
-    /// Finds an existing workspace whose paths match, or creates a new one.
-    ///
-    /// For local projects (`host` is `None`), this delegates to
-    /// [`Self::find_or_create_local_workspace`]. For remote projects, it
-    /// tries an exact path match and, if no existing workspace is found,
-    /// calls `connect_remote` to establish a connection and creates a new
-    /// remote workspace.
-    ///
-    /// The `connect_remote` closure is responsible for any user-facing
-    /// connection UI (e.g. password prompts). It receives the connection
-    /// options and should return a [`Task`] that resolves to the
-    /// [`RemoteClient`] session, or `None` if the connection was
-    /// cancelled.
+    /// Finds an existing local workspace whose paths match, or creates a new one.
     pub fn find_or_create_workspace(
         &mut self,
         paths: PathList,
-        host: Option<RemoteConnectionOptions>,
         provisional_project_group_key: Option<ProjectGroupKey>,
-        connect_remote: impl FnOnce(
-            RemoteConnectionOptions,
-            &mut Window,
-            &mut Context<Self>,
-        ) -> Task<Result<Option<Entity<remote::RemoteClient>>>>
-        + 'static,
         excluding: &[Entity<Workspace>],
         init: Option<Box<dyn FnOnce(&mut Workspace, &mut Window, &mut Context<Workspace>) + Send>>,
         open_mode: OpenMode,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Task<Result<Entity<Workspace>>> {
-        self.find_or_create_workspace_with_source_workspace(
+        self.find_or_create_local_workspace(
             paths,
-            host,
             provisional_project_group_key,
-            connect_remote,
             excluding,
             init,
             open_mode,
-            None,
             window,
             cx,
         )
-    }
-
-    pub fn find_or_create_workspace_with_source_workspace(
-        &mut self,
-        paths: PathList,
-        host: Option<RemoteConnectionOptions>,
-        provisional_project_group_key: Option<ProjectGroupKey>,
-        connect_remote: impl FnOnce(
-            RemoteConnectionOptions,
-            &mut Window,
-            &mut Context<Self>,
-        ) -> Task<Result<Option<Entity<remote::RemoteClient>>>>
-        + 'static,
-        excluding: &[Entity<Workspace>],
-        init: Option<Box<dyn FnOnce(&mut Workspace, &mut Window, &mut Context<Workspace>) + Send>>,
-        open_mode: OpenMode,
-        source_workspace: Option<WeakEntity<Workspace>>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<Entity<Workspace>>> {
-        if let Some(workspace) = self.workspace_for_paths(&paths, host.as_ref(), cx) {
-            self.activate(workspace.clone(), source_workspace, window, cx);
-            return Task::ready(Ok(workspace));
-        }
-
-        let Some(connection_options) = host else {
-            return self.find_or_create_local_workspace_with_source_workspace(
-                paths,
-                provisional_project_group_key,
-                excluding,
-                init,
-                open_mode,
-                source_workspace,
-                window,
-                cx,
-            );
-        };
-
-        let app_state = self.workspace().read(cx).app_state().clone();
-        let window_handle = window.window_handle().downcast::<MultiWorkspace>();
-        let connect_task = connect_remote(connection_options.clone(), window, cx);
-        let paths_vec = paths.paths().to_vec();
-
-        cx.spawn(async move |_this, cx| {
-            let session = connect_task
-                .await?
-                .ok_or_else(|| anyhow::anyhow!("Remote connection was cancelled"))?;
-
-            let new_project = cx.update(|cx| {
-                Project::remote(
-                    session,
-                    app_state.client.clone(),
-                    app_state.node_runtime.clone(),
-                    app_state.user_store.clone(),
-                    app_state.languages.clone(),
-                    app_state.fs.clone(),
-                    true,
-                    cx,
-                )
-            });
-
-            let effective_paths_vec =
-                if let Some(project_group) = provisional_project_group_key.as_ref() {
-                    let resolve_tasks = cx.update(|cx| {
-                        let project = new_project.read(cx);
-                        paths_vec
-                            .iter()
-                            .map(|path| project.resolve_abs_path(&path.to_string_lossy(), cx))
-                            .collect::<Vec<_>>()
-                    });
-                    let resolved = futures::future::join_all(resolve_tasks).await;
-                    // `resolve_abs_path` returns `None` for both "definitely
-                    // absent" and transport errors (it swallows the error via
-                    // `log_err`). This is a weaker guarantee than the local
-                    // `Ok(None)` check, but it matches how the rest of the
-                    // codebase consumes this API.
-                    let all_paths_missing =
-                        !paths_vec.is_empty() && resolved.iter().all(|resolved| resolved.is_none());
-
-                    if all_paths_missing {
-                        project_group.path_list().paths().to_vec()
-                    } else {
-                        paths_vec
-                    }
-                } else {
-                    paths_vec
-                };
-
-            let window_handle =
-                window_handle.ok_or_else(|| anyhow::anyhow!("Window is not a MultiWorkspace"))?;
-
-            open_remote_project_with_existing_connection(
-                connection_options,
-                new_project,
-                effective_paths_vec,
-                app_state,
-                window_handle,
-                provisional_project_group_key,
-                source_workspace,
-                cx,
-            )
-            .await?;
-
-            window_handle.update(cx, |multi_workspace, window, cx| {
-                let workspace = multi_workspace.workspace().clone();
-                multi_workspace.add(workspace.clone(), window, cx);
-                workspace
-            })
-        })
     }
 
     /// Finds an existing workspace in this multi-workspace whose paths match,
@@ -1344,8 +1100,7 @@ impl MultiWorkspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Task<Result<Entity<Workspace>>> {
-        if let Some(workspace) = self.workspace_for_paths_excluding(&path_list, None, excluding, cx)
-        {
+        if let Some(workspace) = self.workspace_for_paths_excluding(&path_list, excluding, cx) {
             self.activate(workspace.clone(), source_workspace, window, cx);
             return Task::ready(Ok(workspace));
         }
@@ -1386,7 +1141,6 @@ impl MultiWorkspace {
                         multi_workspace
                             .workspace_for_paths_excluding(
                                 &effective_path_list,
-                                None,
                                 &excluding,
                                 cx,
                             )
@@ -1510,8 +1264,7 @@ impl MultiWorkspace {
     /// but leaves the currently-active workspace focused.
     ///
     /// Used when something opens a workspace the user should not be yanked
-    /// into — e.g. the agent's `create_thread` tool spawning a sibling
-    /// worktree in the background.
+    /// into, such as creating a sibling worktree in the background.
     pub fn add_background_workspace(
         &mut self,
         workspace: Entity<Workspace>,
@@ -1539,25 +1292,6 @@ impl MultiWorkspace {
         let key = workspace.read(cx).project_group_key(cx);
         self.retain_workspace(workspace, key, cx);
         self.serialize(cx);
-        cx.notify();
-    }
-
-    /// Collapses to a single workspace, discarding all groups.
-    /// Used when multi-workspace is disabled by settings.
-    fn collapse_to_single_workspace(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.sidebar_open {
-            self.close_sidebar(window, cx);
-        }
-
-        let active_workspace = self.active_workspace.clone();
-        for workspace in self.retained_workspaces.clone() {
-            if workspace != active_workspace {
-                self.detach_workspace(&workspace, cx);
-            }
-        }
-
-        self.retained_workspaces.clear();
-        self.project_groups.clear();
         cx.notify();
     }
 
@@ -2175,13 +1909,6 @@ impl Render for MultiWorkspace {
                             this.focus_sidebar(window, cx);
                         },
                     ))
-                    .on_action(cx.listener(
-                        |this: &mut Self, action: &ToggleThreadSwitcher, window, cx| {
-                            if let Some(sidebar) = &this.sidebar {
-                                sidebar.toggle_thread_switcher(action.select_last, window, cx);
-                            }
-                        },
-                    ))
                     .on_action(cx.listener(|this: &mut Self, _: &NextProject, window, cx| {
                         if let Some(sidebar) = &this.sidebar {
                             sidebar.cycle_project(true, window, cx);
@@ -2191,18 +1918,6 @@ impl Render for MultiWorkspace {
                         cx.listener(|this: &mut Self, _: &PreviousProject, window, cx| {
                             if let Some(sidebar) = &this.sidebar {
                                 sidebar.cycle_project(false, window, cx);
-                            }
-                        }),
-                    )
-                    .on_action(cx.listener(|this: &mut Self, _: &NextThread, window, cx| {
-                        if let Some(sidebar) = &this.sidebar {
-                            sidebar.cycle_thread(true, window, cx);
-                        }
-                    }))
-                    .on_action(
-                        cx.listener(|this: &mut Self, _: &PreviousThread, window, cx| {
-                            if let Some(sidebar) = &this.sidebar {
-                                sidebar.cycle_thread(false, window, cx);
                             }
                         }),
                     )

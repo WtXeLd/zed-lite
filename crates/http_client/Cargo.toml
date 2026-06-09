@@ -10,6 +10,7 @@ description = "A HTTP client library for Zed and GPUI"
 workspace = true
 
 [features]
+lite = []
 test-support = []
 
 [lib]

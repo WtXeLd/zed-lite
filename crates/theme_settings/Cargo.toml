@@ -9,6 +9,7 @@ license = "GPL-3.0-or-later"
 workspace = true
 
 [features]
+lite = []
 default = []
 test-support = ["gpui/test-support", "settings/test-support", "theme/test-support"]
 

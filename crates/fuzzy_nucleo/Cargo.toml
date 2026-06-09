@@ -12,6 +12,10 @@ workspace = true
 path = "src/fuzzy_nucleo.rs"
 doctest = false
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 fuzzy.workspace = true
 nucleo.workspace = true

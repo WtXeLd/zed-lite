@@ -9,6 +9,8 @@ license = "GPL-3.0-or-later"
 workspace = true
 
 [features]
+lite = []
+test-support = []
 tracy = ["tracing-tracy", "tracy-client"]
 
 [dependencies]

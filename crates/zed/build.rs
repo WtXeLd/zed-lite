@@ -4,9 +4,8 @@ use std::process::Command;
 fn main() {
     #[cfg(target_os = "linux")]
     {
-        // Add rpaths for libraries that webrtc-sys dlopens at runtime.
-        // This is mostly required for hosts with non-standard SO installation
-        // locations such as NixOS.
+        // Add rpaths for libraries dlopened by the platform layer on hosts with
+        // non-standard SO installation locations such as NixOS.
         let dlopened_libs = ["libva", "libva-drm", "egl"];
 
         let mut rpath_dirs = std::collections::BTreeSet::new();
@@ -202,7 +201,6 @@ fn main() {
             }
         }
 
-        println!("cargo:rerun-if-env-changed=RELEASE_CHANNEL");
         println!("cargo:rerun-if-env-changed=GITHUB_RUN_NUMBER");
 
         #[cfg(windows)]
@@ -217,23 +215,12 @@ fn main() {
 
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 fn icon_path() -> std::path::PathBuf {
-    use std::str::FromStr;
-
-    let release_channel = option_env!("RELEASE_CHANNEL").unwrap_or("dev");
-    let channel = match release_channel {
-        "stable" => "",
-        "preview" => "-preview",
-        "nightly" => "-nightly",
-        "dev" => "-dev",
-        _ => "-dev",
-    };
-
     #[cfg(windows)]
-    let icon = format!("resources/windows/app-icon{}.ico", channel);
+    let icon = String::from("resources/windows/app-icon.ico");
     #[cfg(not(windows))]
-    let icon = format!("resources/app-icon{}.png", channel);
+    let icon = String::from("resources/app-icon.png");
 
-    std::path::PathBuf::from_str(&icon).unwrap()
+    std::path::PathBuf::from(icon)
 }
 
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
@@ -254,6 +241,5 @@ fn prepare_app_icon_x11() {
     let icon_out_path = Path::new(&out_dir).join("app_icon.png");
     resized_image.save(&icon_out_path).expect("saving app icon");
 
-    println!("cargo:rerun-if-env-changed=RELEASE_CHANNEL");
     println!("cargo:rerun-if-changed={}", icon_path().to_string_lossy());
 }

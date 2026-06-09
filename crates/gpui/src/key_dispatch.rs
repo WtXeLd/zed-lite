@@ -670,7 +670,7 @@ mod tests {
             KeyBinding::new(
                 "tab",
                 Unbind("dispatch_test::TestAction".into()),
-                Some("Editor && edit_prediction"),
+                Some("Editor && inline_suggestion"),
             ),
             KeyBinding::new(
                 "tab",
@@ -681,7 +681,7 @@ mod tests {
 
         let contexts = vec![
             KeyContext::parse("Workspace").unwrap(),
-            KeyContext::parse("Editor showing_completions edit_prediction").unwrap(),
+            KeyContext::parse("Editor showing_completions inline_suggestion").unwrap(),
         ];
 
         let bindings = tree.bindings_for_action(&TestAction, &contexts);
@@ -702,7 +702,7 @@ mod tests {
             KeyBinding::new(
                 "tab",
                 Unbind("dispatch_test::TestAction".into()),
-                Some("Editor && edit_prediction"),
+                Some("Editor && inline_suggestion"),
             ),
             KeyBinding::new(
                 "tab",

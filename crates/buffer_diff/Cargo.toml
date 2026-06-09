@@ -12,6 +12,7 @@ workspace = true
 path = "src/buffer_diff.rs"
 
 [features]
+lite = []
 test-support = ["settings"]
 
 [dependencies]

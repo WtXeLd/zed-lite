@@ -12,6 +12,10 @@ workspace = true
 path = "src/watch.rs"
 doctest = true
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 parking_lot.workspace = true
 

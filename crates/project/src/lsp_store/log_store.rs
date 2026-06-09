@@ -9,7 +9,6 @@ use lsp::{
     IoKind, LanguageServer, LanguageServerId, LanguageServerName, LanguageServerSelector,
     MessageType, TraceValue,
 };
-use rpc::proto;
 use settings::WorktreeId;
 
 use crate::{LanguageServerLogType, LspStore, Project, ProjectItem as _};
@@ -48,7 +47,6 @@ pub struct LogStore {
 
 struct ProjectState {
     _subscriptions: [Subscription; 2],
-    copilot_log_subscription: Option<lsp::Subscription>,
 }
 
 pub trait Message: AsRef<str> {
@@ -352,7 +350,6 @@ impl LogStore {
                         }
                     }),
                 ],
-                copilot_log_subscription: None,
             },
         );
     }
@@ -664,34 +661,6 @@ impl LogStore {
     }
 
     fn emit_event(&mut self, e: Event, cx: &mut Context<Self>) {
-        match &e {
-            Event::NewServerLogEntry { id, kind, text } => {
-                if let Some(state) = self.get_language_server_state(*id) {
-                    let downstream_client = match &state.kind {
-                        LanguageServerKind::Remote { project }
-                        | LanguageServerKind::Local { project } => project
-                            .upgrade()
-                            .map(|project| project.read(cx).lsp_store()),
-                        LanguageServerKind::LocalSsh { lsp_store } => lsp_store.upgrade(),
-                        LanguageServerKind::Global => None,
-                    }
-                    .and_then(|lsp_store| lsp_store.read(cx).downstream_client());
-                    if let Some((client, project_id)) = downstream_client {
-                        if Some(LogKind::from_server_log_type(kind)) == state.toggled_log_kind {
-                            client
-                                .send(proto::LanguageServerLog {
-                                    project_id,
-                                    language_server_id: id.to_proto(),
-                                    message: text.clone(),
-                                    log_type: Some(kind.to_proto()),
-                                })
-                                .ok();
-                        }
-                    }
-                }
-            }
-        }
-
         cx.emit(e);
     }
 
@@ -715,13 +684,5 @@ impl LogStore {
                 self.disable_rpc_trace_for_language_server(server_id);
             }
         }
-    }
-    pub fn copilot_state_for_project(
-        &mut self,
-        project: &WeakEntity<Project>,
-    ) -> Option<&mut Option<lsp::Subscription>> {
-        self.projects
-            .get_mut(project)
-            .map(|project| &mut project.copilot_log_subscription)
     }
 }

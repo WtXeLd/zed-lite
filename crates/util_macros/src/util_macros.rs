@@ -1,10 +1,44 @@
 #![cfg_attr(not(target_os = "windows"), allow(unused))]
 #![allow(clippy::test_attr_in_doctest)]
 
-use perf::*;
 use proc_macro::TokenStream;
 use quote::{ToTokens, quote};
 use syn::{ItemFn, LitStr, parse_macro_input, parse_quote};
+
+mod consts {
+    pub const SUF_NORMAL: &str = "__ZED_PERF_FN";
+    pub const SUF_MDATA: &str = "__ZED_PERF_MDATA";
+    pub const ITER_ENV_VAR: &str = "ZED_PERF_ITER";
+    pub const MDATA_LINE_PREF: &str = "ZED_MDATA_";
+    pub const MDATA_VER: u32 = 0;
+    pub const WEIGHT_DEFAULT: u8 = 50;
+    pub const ITER_COUNT_LINE_NAME: &str = "iter_count";
+    pub const WEIGHT_LINE_NAME: &str = "weight";
+    pub const IMPORTANCE_LINE_NAME: &str = "importance";
+    pub const VERSION_LINE_NAME: &str = "version";
+}
+
+#[derive(Default)]
+enum Importance {
+    Critical,
+    Important,
+    #[default]
+    Average,
+    Iffy,
+    Fluff,
+}
+
+impl std::fmt::Display for Importance {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Importance::Critical => formatter.write_str("critical"),
+            Importance::Important => formatter.write_str("important"),
+            Importance::Average => formatter.write_str("average"),
+            Importance::Iffy => formatter.write_str("iffy"),
+            Importance::Fluff => formatter.write_str("fluff"),
+        }
+    }
+}
 
 /// A macro used in tests for cross-platform path string literals in tests. On Windows it replaces
 /// `/` with `\\` and adds `C:` to the beginning of absolute paths. On other platforms, the path is

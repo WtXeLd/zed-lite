@@ -11,6 +11,10 @@ workspace = true
 [lib]
 path = "src/keymap_editor.rs"
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 anyhow.workspace = true
 collections.workspace = true

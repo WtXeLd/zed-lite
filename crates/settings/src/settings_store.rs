@@ -212,7 +212,6 @@ pub enum LocalSettingsKind {
     Settings,
     Tasks,
     Editorconfig,
-    Debug,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -1041,16 +1040,6 @@ impl SettingsStore {
                         .to_path_buf(),
                 });
             }
-            (LocalSettingsPath::InWorktree(directory_path), LocalSettingsKind::Debug, _) => {
-                return Err(InvalidSettingsError::Debug {
-                    message: "Attempted to submit debugger config into the settings store"
-                        .to_string(),
-                    path: directory_path
-                        .join(RelPath::unix(task_file_name()).unwrap())
-                        .as_std_path()
-                        .to_path_buf(),
-                });
-            }
             (LocalSettingsPath::InWorktree(directory_path), LocalSettingsKind::Settings, None) => {
                 zed_settings_changed = self
                     .local_settings
@@ -1336,53 +1325,6 @@ impl SettingsStore {
             }
             merged.merge_from_option(self.server_settings.as_deref());
 
-            // Merge `disable_ai` from all project/local settings into the global value.
-            // Since `SaturatingBool` uses OR logic, if any project has `disable_ai: true`,
-            // the global value will be true. This allows project-level `disable_ai` to
-            // affect the global setting used by UI elements without file context.
-            for local_settings in self.local_settings.values() {
-                merged
-                    .project
-                    .disable_ai
-                    .merge_from(&local_settings.project.disable_ai);
-            }
-
-            self.merged_settings = Rc::new(merged);
-
-            for setting_value in self.setting_values.values_mut() {
-                let value = setting_value.from_settings(&self.merged_settings);
-                setting_value.set_global_value(value);
-            }
-        } else {
-            // When only a local path changed, we still need to recompute the global
-            // `disable_ai` value since it depends on all local settings.
-            let mut merged = (*self.merged_settings).clone();
-            // Reset disable_ai to compute fresh from base settings
-            merged.project.disable_ai = self.default_settings.project.disable_ai;
-            if let Some(global) = &self.global_settings {
-                merged
-                    .project
-                    .disable_ai
-                    .merge_from(&global.project.disable_ai);
-            }
-            if let Some(user) = &self.user_settings {
-                merged
-                    .project
-                    .disable_ai
-                    .merge_from(&user.content.project.disable_ai);
-            }
-            if let Some(server) = &self.server_settings {
-                merged
-                    .project
-                    .disable_ai
-                    .merge_from(&server.project.disable_ai);
-            }
-            for local_settings in self.local_settings.values() {
-                merged
-                    .project
-                    .disable_ai
-                    .merge_from(&local_settings.project.disable_ai);
-            }
             self.merged_settings = Rc::new(merged);
 
             for setting_value in self.setting_values.values_mut() {
@@ -1535,10 +1477,6 @@ pub enum InvalidSettingsError {
         path: PathBuf,
         message: String,
     },
-    Debug {
-        path: PathBuf,
-        message: String,
-    },
 }
 
 impl std::fmt::Display for InvalidSettingsError {
@@ -1549,8 +1487,7 @@ impl std::fmt::Display for InvalidSettingsError {
             | InvalidSettingsError::ServerSettings { message }
             | InvalidSettingsError::DefaultSettings { message }
             | InvalidSettingsError::Tasks { message, .. }
-            | InvalidSettingsError::Editorconfig { message, .. }
-            | InvalidSettingsError::Debug { message, .. } => write!(f, "{message}"),
+            | InvalidSettingsError::Editorconfig { message, .. } => write!(f, "{message}"),
         }
     }
 }
@@ -1786,18 +1723,12 @@ mod tests {
 
     #[gpui::test]
     fn test_default_settings_release_channel_overrides(cx: &mut App) {
-        // The test deals with overrides and should ignore the other set-ups (Preview and Stable runs)
-        if *release_channel::RELEASE_CHANNEL != release_channel::ReleaseChannel::Dev {
-            return;
-        }
-
         let mut defaults: serde_json::Value =
             crate::parse_json_with_comments(&default_settings()).unwrap();
         let root = defaults
             .as_object_mut()
             .expect("default settings must be a JSON object");
-        root.insert("dev".into(), serde_json::json!({ "auto_update": false }));
-        root.insert("stable".into(), serde_json::json!({ "auto_update": true }));
+        root.insert("lite".into(), serde_json::json!({ "auto_update": false }));
         let defaults_with_overrides = serde_json::to_string(&defaults).unwrap();
 
         let mut store = SettingsStore::new(cx, &defaults_with_overrides);

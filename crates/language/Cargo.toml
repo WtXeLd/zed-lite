@@ -13,6 +13,7 @@ path = "src/language.rs"
 doctest = false
 
 [features]
+lite = []
 test-support = [
     "rand",
     "collections/test-support",

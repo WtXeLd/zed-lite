@@ -12,6 +12,8 @@ workspace = true
 path = "src/zed_env_vars.rs"
 
 [features]
+lite = []
+test-support = []
 default = []
 
 [dependencies]

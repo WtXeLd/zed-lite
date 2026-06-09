@@ -12,6 +12,10 @@ workspace = true
 path = "src/breadcrumbs.rs"
 doctest = false
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 gpui.workspace = true
 ui.workspace = true

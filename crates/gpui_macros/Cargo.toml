@@ -10,6 +10,8 @@ description = "Macros used by gpui"
 workspace = true
 
 [features]
+lite = []
+test-support = []
 inspector = []
 
 [lib]

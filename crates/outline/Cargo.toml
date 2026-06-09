@@ -12,6 +12,10 @@ workspace = true
 path = "src/outline.rs"
 doctest = false
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 editor.workspace = true
 fuzzy.workspace = true

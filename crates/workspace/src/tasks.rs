@@ -2,13 +2,11 @@ use std::process::ExitStatus;
 
 use anyhow::Result;
 use collections::HashSet;
-use gpui::{AppContext, AsyncWindowContext, Context, Entity, Task, TaskExt, WeakEntity};
-use language::Buffer;
+use gpui::{AppContext, AsyncWindowContext, Context, Task, TaskExt, WeakEntity};
 use project::{TaskSourceKind, WorktreeId};
-use remote::ConnectionState;
 use task::{
-    DebugScenario, ResolvedTask, SaveStrategy, SharedTaskContext, SpawnInTerminal, TaskContext,
-    TaskHook, TaskTemplate, TaskVariables, VariableName,
+    ResolvedTask, SaveStrategy, SpawnInTerminal, TaskContext, TaskHook, TaskTemplate,
+    TaskVariables, VariableName,
 };
 use ui::Window;
 use util::TryFutureExt;
@@ -25,19 +23,6 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        match self.project.read(cx).remote_connection_state(cx) {
-            None | Some(ConnectionState::Connected) => {}
-            Some(
-                ConnectionState::Connecting
-                | ConnectionState::Disconnected
-                | ConnectionState::HeartbeatMissed
-                | ConnectionState::Reconnecting,
-            ) => {
-                log::warn!("Cannot schedule tasks when disconnected from a remote host");
-                return;
-            }
-        }
-
         if let Some(spawn_in_terminal) =
             task_to_resolve.resolve_task(&task_source_kind.to_id_base(), task_cx)
         {
@@ -61,10 +46,6 @@ impl Workspace {
     ) {
         let spawn_in_terminal = resolved_task.resolved.clone();
         if !omit_history {
-            if let Some(debugger_provider) = self.debugger_provider.as_ref() {
-                debugger_provider.task_scheduled(cx);
-            }
-
             self.project().update(cx, |project, cx| {
                 if let Some(task_inventory) =
                     project.task_store().read(cx).task_inventory().cloned()
@@ -136,27 +117,6 @@ impl Workspace {
         };
         if let Some(save_action) = save_action {
             save_action.log_err().await;
-        }
-    }
-
-    pub fn start_debug_session(
-        &mut self,
-        scenario: DebugScenario,
-        task_context: SharedTaskContext,
-        active_buffer: Option<Entity<Buffer>>,
-        worktree_id: Option<WorktreeId>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(provider) = self.debugger_provider.as_mut() {
-            provider.start_session(
-                scenario,
-                task_context,
-                active_buffer,
-                worktree_id,
-                window,
-                cx,
-            )
         }
     }
 

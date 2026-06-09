@@ -13,22 +13,23 @@ path = "src/editor.rs"
 doctest = false
 
 [features]
+lite = []
 test-support = [
-    "text/test-support",
-    "language/test-support",
     "gpui/test-support",
+    "language/test-support",
+    "lsp/test-support",
+    "markdown/test-support",
     "multi_buffer/test-support",
     "project/test-support",
+    "settings/test-support",
+    "text/test-support",
     "theme/test-support",
+    "tree-sitter-html",
+    "tree-sitter-typescript",
     "util/test-support",
     "workspace/test-support",
-    "tree-sitter-c",
-    "tree-sitter-rust",
-    "tree-sitter-typescript",
-    "tree-sitter-html",
-    "proptest",
-    "unindent",
 ]
+default = []
 
 [dependencies]
 aho-corasick.workspace = true
@@ -40,7 +41,6 @@ client.workspace = true
 clock.workspace = true
 collections.workspace = true
 convert_case.workspace = true
-dap.workspace = true
 db.workspace = true
 buffer_diff.workspace = true
 emojis.workspace = true
@@ -53,7 +53,6 @@ fs.workspace = true
 git.workspace = true
 gpui.workspace = true
 indoc.workspace = true
-edit_prediction_types.workspace = true
 itertools.workspace = true
 language.workspace = true
 linkify.workspace = true

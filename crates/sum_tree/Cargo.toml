@@ -32,4 +32,5 @@ zlog.workspace = true
 ignored = ["tracing"]
 
 [features]
+lite = []
 test-support = ["proptest"]

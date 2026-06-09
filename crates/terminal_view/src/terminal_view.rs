@@ -59,7 +59,6 @@ use workspace::{
         Direction, SearchEvent, SearchOptions, SearchToken, SearchableItem, SearchableItemHandle,
     },
 };
-use zed_actions::{agent::AddSelectionToThread, assistant::InlineAssist};
 
 struct ImeState {
     marked_text: String,
@@ -211,18 +210,13 @@ impl TerminalView {
     ///Create a new Terminal in the current working directory or the user's home directory
     pub fn deploy(
         workspace: &mut Workspace,
-        action: &NewCenterTerminal,
+        _: &NewCenterTerminal,
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) {
-        let local = action.local;
         let working_directory = default_working_directory(workspace, cx);
         TerminalPanel::add_center_terminal(workspace, window, cx, move |project, cx| {
-            if local {
-                project.create_local_terminal(cx)
-            } else {
-                project.create_terminal_shell(working_directory, cx)
-            }
+            project.create_terminal_shell(working_directory, cx)
         })
         .detach_and_log_err(cx);
     }
@@ -496,15 +490,10 @@ impl TerminalView {
     pub fn deploy_context_menu(
         &mut self,
         position: GpuiPoint<Pixels>,
-        has_selection: bool,
+        _has_selection: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let assistant_enabled = self
-            .workspace
-            .upgrade()
-            .and_then(|workspace| workspace.read(cx).panel::<TerminalPanel>(cx))
-            .is_some_and(|terminal_panel| terminal_panel.read(cx).assistant_enabled());
         let context_menu = ContextMenu::build(window, cx, |menu, _, _| {
             menu.context(self.focus_handle.clone())
                 .action("New Terminal", Box::new(NewTerminal::default()))
@@ -518,16 +507,6 @@ impl TerminalView {
                 .action("Paste Text", Box::new(PasteText))
                 .action("Select All", Box::new(SelectAll))
                 .action("Clear", Box::new(Clear))
-                .when(
-                    assistant_enabled && !matches!(self.mode, TerminalMode::Embedded { .. }),
-                    |menu| {
-                        menu.separator()
-                            .action("Inline Assist", Box::new(InlineAssist::default()))
-                            .when(has_selection, |menu| {
-                                menu.action("Add to Agent Thread", Box::new(AddSelectionToThread))
-                            })
-                    },
-                )
                 .separator()
                 .action(
                     "Close Terminal Tab",
@@ -917,8 +896,7 @@ impl TerminalView {
         }
     }
 
-    /// Emits a raw Ctrl+V so TUI agents can read the OS clipboard directly
-    /// and attach images using their native workflows.
+    /// Emits a raw Ctrl+V so terminal programs can read the OS clipboard directly.
     fn forward_ctrl_v(&self, cx: &mut Context<Self>) {
         self.terminal.update(cx, |term, _| {
             term.input(vec![0x16]);
@@ -2078,12 +2056,7 @@ impl SearchableItem for TerminalView {
 
 /// Gets the working directory for the given workspace, respecting the user's settings.
 /// Falls back to home directory when no project directory is available.
-///
-/// For remote projects, local-only resolution (home dir fallback, shell expansion,
-/// local `is_dir` checks) is skipped -- returning `None` lets the remote shell
-/// open in the remote user's home directory by default.
 pub fn default_working_directory(workspace: &Workspace, cx: &App) -> Option<PathBuf> {
-    let is_remote = workspace.project().read(cx).is_remote();
     let directory = match &TerminalSettings::get_global(cx).working_directory {
         WorkingDirectory::CurrentFileDirectory => workspace
             .project()
@@ -2093,18 +2066,13 @@ pub fn default_working_directory(workspace: &Workspace, cx: &App) -> Option<Path
         WorkingDirectory::CurrentProjectDirectory => current_project_directory(workspace, cx),
         WorkingDirectory::FirstProjectDirectory => first_project_directory(workspace, cx),
         WorkingDirectory::AlwaysHome => None,
-        WorkingDirectory::Always { directory } if !is_remote => shellexpand::full(directory)
+        WorkingDirectory::Always { directory } => shellexpand::full(directory)
             .ok()
             .map(|dir| Path::new(&dir.to_string()).to_path_buf())
             .filter(|dir| dir.is_dir()),
-        WorkingDirectory::Always { .. } => None,
     };
 
-    if is_remote {
-        directory
-    } else {
-        directory.or_else(dirs::home_dir)
-    }
+    directory.or_else(dirs::home_dir)
 }
 
 fn current_project_directory(workspace: &Workspace, cx: &App) -> Option<PathBuf> {
@@ -2134,7 +2102,6 @@ mod tests {
     use super::*;
     use gpui::{TestAppContext, VisualTestContext};
     use project::{Entry, Project, ProjectPath, Worktree};
-    use remote::RemoteClient;
     use std::path::{Path, PathBuf};
     use util::paths::PathStyle;
     use util::rel_path::RelPath;
@@ -2302,22 +2269,6 @@ mod tests {
             assert_eq!(res, dirs::home_dir());
             let res = first_project_directory(workspace, cx);
             assert_eq!(res, None);
-        });
-    }
-
-    #[gpui::test]
-    async fn remote_no_worktree_uses_remote_shell_default_cwd(
-        cx: &mut TestAppContext,
-        server_cx: &mut TestAppContext,
-    ) {
-        let (_project, workspace) = init_remote_test(cx, server_cx).await;
-
-        cx.read(|cx| {
-            let workspace = workspace.read(cx);
-
-            assert!(workspace.project().read(cx).is_remote());
-            assert!(workspace.worktrees(cx).next().is_none());
-            assert_eq!(default_working_directory(workspace, cx), None);
         });
     }
 
@@ -2542,64 +2493,6 @@ mod tests {
             .unwrap();
 
         (project, workspace, window_handle)
-    }
-
-    async fn init_remote_test(
-        cx: &mut TestAppContext,
-        server_cx: &mut TestAppContext,
-    ) -> (Entity<Project>, Entity<Workspace>) {
-        cx.update(|cx| {
-            release_channel::init(semver::Version::new(0, 0, 0), cx);
-        });
-        server_cx.update(|cx| {
-            release_channel::init(semver::Version::new(0, 0, 0), cx);
-        });
-
-        let params = cx.update(AppState::test);
-        let (opts, server_session, connect_guard) = RemoteClient::fake_server(cx, server_cx);
-        let ping_handler = server_cx.new(|_| ());
-        server_session.add_request_handler::<rpc::proto::Ping, _, _, _>(
-            ping_handler.downgrade(),
-            |_entity, _envelope, _cx| async { Ok(rpc::proto::Ack {}) },
-        );
-        drop(connect_guard);
-
-        let remote_client = RemoteClient::connect_mock(opts, cx).await;
-        let project = cx.update(|cx| {
-            Project::remote(
-                remote_client,
-                params.client.clone(),
-                params.node_runtime.clone(),
-                params.user_store.clone(),
-                params.languages.clone(),
-                params.fs.clone(),
-                false,
-                cx,
-            )
-        });
-
-        let window_handle = cx.add_window({
-            let params = params.clone();
-            let project_for_workspace = project.clone();
-            move |window, cx| {
-                window.activate_window();
-                let workspace = cx.new(|cx| {
-                    Workspace::new(
-                        None,
-                        project_for_workspace.clone(),
-                        params.clone(),
-                        window,
-                        cx,
-                    )
-                });
-                MultiWorkspace::new(workspace, window, cx)
-            }
-        });
-        let workspace = window_handle
-            .read_with(cx, |mw, _| mw.workspace().clone())
-            .unwrap();
-
-        (project, workspace)
     }
 
     /// Creates a file in the given worktree and returns its entry.

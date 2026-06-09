@@ -12,6 +12,8 @@ workspace = true
 path = "src/zlog_settings.rs"
 
 [features]
+lite = []
+test-support = []
 default = []
 
 [dependencies]

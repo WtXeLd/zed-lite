@@ -15,7 +15,6 @@ use project::Project;
 use project::git_store::Repository;
 use project::project_settings::ProjectSettings;
 use project::trusted_worktrees::{PathTrust, TrustedWorktrees};
-use remote::RemoteConnectionOptions;
 use settings::Settings;
 use ui::prelude::*;
 use workspace::{
@@ -32,8 +31,8 @@ use crate::git_panel::{open_output, show_error_toast};
 use crate::worktree_names;
 
 /// Whether a worktree operation is creating a new one or switching to an
-/// existing one. Controls whether the source workspace's state (dock layout,
-/// open files, agent panel draft) is inherited by the destination.
+/// existing one. Controls whether the source workspace's layout and open files
+/// are inherited by the destination.
 enum WorktreeOperation {
     Create,
     Switch,
@@ -581,11 +580,11 @@ fn maybe_propagate_worktree_trust(
     .ok();
 }
 
-/// Handles the `CreateWorktree` action generically, without any agent panel involvement.
+/// Handles the `CreateWorktree` action.
 /// Creates a new git worktree, opens the workspace, restores layout and files.
 /// Errors are surfaced to the user via toasts; the new workspace handle is
 /// discarded. Use [`create_worktree_workspace`] when you need the resulting
-/// workspace (e.g., the `create_thread` agent tool spawns a thread in it).
+/// workspace.
 pub fn handle_create_worktree(
     workspace: &mut Workspace,
     action: &zed_actions::CreateWorktree,
@@ -613,8 +612,8 @@ pub struct CreatedWorktreeWorkspace {
     /// True when the project contained more than one Zed worktree backed by
     /// the same underlying git repository, so they were consolidated into a
     /// single new worktree (they resolve to the same target path). Callers
-    /// that care — like the `create_thread` agent tool — can use this to warn
-    /// that the result may not reflect every source worktree's state.
+    /// that care can use this to warn that the result may not reflect every
+    /// source worktree's state.
     pub consolidated_worktrees: bool,
 }
 
@@ -626,14 +625,9 @@ pub struct CreatedWorktreeWorkspace {
 /// toast on the source workspace so the user understands why the action
 /// didn't take effect; the same error is also returned to the caller.
 ///
-/// Used by the `create_thread` agent tool to spawn a sibling thread inside
-/// the newly-opened workspace.
-///
 /// The new workspace is opened in the **background** (added as a retained
 /// tab without switching to it or moving focus), and it's a clean checkout
 /// rather than inheriting the source workspace's open files and dock layout.
-/// This mirrors how the agent's non-worktree threads are created in the
-/// background rather than yanking the user away from what they're doing.
 pub fn create_worktree_workspace(
     workspace: &mut Workspace,
     action: &zed_actions::CreateWorktree,
@@ -647,7 +641,7 @@ pub fn create_worktree_workspace(
         window,
         fallback_focused_dock,
         RemoteBranchFetchMode::Fetch,
-        // Agent-created worktree workspaces open in the background.
+        // Background worktree workspaces should not steal focus.
         false,
         cx,
     )
@@ -669,11 +663,6 @@ fn create_worktree_workspace_inner(
             "create_worktree: no git repository in the project"
         )));
     }
-    if project.read(cx).is_via_collab() {
-        return Task::ready(Err(anyhow!(
-            "create_worktree: not supported in collab projects"
-        )));
-    }
 
     // Guard against concurrent creation. We treat a concurrent creation as
     // a hard error here so the caller can surface it; the user-facing
@@ -687,7 +676,6 @@ fn create_worktree_workspace_inner(
         workspace.capture_state_for_worktree_switch(window, fallback_focused_dock, cx);
     let workspace_handle = workspace.weak_handle();
     let window_handle = window.window_handle().downcast::<MultiWorkspace>();
-    let remote_connection_options = project.read(cx).remote_connection_options(cx);
 
     let (git_repos, non_git_paths) = classify_worktrees(project.read(cx), cx);
 
@@ -700,25 +688,6 @@ fn create_worktree_workspace_inner(
             cx,
         );
         return Task::ready(Err(anyhow!("No git repositories found in the project")));
-    }
-
-    if remote_connection_options.is_some() {
-        let is_disconnected = project
-            .read(cx)
-            .remote_client()
-            .is_some_and(|client| client.read(cx).is_disconnected());
-        if is_disconnected {
-            let toast_workspace = cx.entity();
-            show_error_toast(
-                toast_workspace,
-                "worktree create",
-                anyhow!("Cannot create worktree: remote connection is not active"),
-                cx,
-            );
-            return Task::ready(Err(anyhow!(
-                "Cannot create worktree: remote connection is not active"
-            )));
-        }
     }
 
     let worktree_name = action.worktree_name.clone();
@@ -761,7 +730,6 @@ fn create_worktree_workspace_inner(
             previous_state,
             workspace_handle.clone(),
             window_handle,
-            remote_connection_options,
             activate,
             &mut cx,
         )
@@ -808,10 +776,6 @@ pub fn handle_switch_worktree(
         log::error!("switch_to_worktree: no git repository in the project");
         return;
     }
-    if project.read(cx).is_via_collab() {
-        log::error!("switch_to_worktree: not supported in collab projects");
-        return;
-    }
 
     // Guard against concurrent creation
     if workspace.active_worktree_creation().label.is_some() {
@@ -822,7 +786,6 @@ pub fn handle_switch_worktree(
         workspace.capture_state_for_worktree_switch(window, fallback_focused_dock, cx);
     let workspace_handle = workspace.weak_handle();
     let window_handle = window.window_handle().downcast::<MultiWorkspace>();
-    let remote_connection_options = project.read(cx).remote_connection_options(cx);
 
     let (git_repos, non_git_paths) = classify_worktrees(project.read(cx), cx);
 
@@ -845,7 +808,6 @@ pub fn handle_switch_worktree(
             previous_state,
             workspace_handle.clone(),
             window_handle,
-            remote_connection_options,
             &mut cx,
         )
         .await;
@@ -875,7 +837,6 @@ async fn do_create_worktree(
     previous_state: PreviousWorkspaceState,
     workspace: WeakEntity<Workspace>,
     window_handle: Option<gpui::WindowHandle<MultiWorkspace>>,
-    remote_connection_options: Option<RemoteConnectionOptions>,
     activate: bool,
     cx: &mut AsyncWindowContext,
 ) -> anyhow::Result<CreatedWorktreeWorkspace> {
@@ -978,7 +939,6 @@ async fn do_create_worktree(
         previous_state,
         workspace,
         window_handle,
-        remote_connection_options,
         WorktreeOperation::Create,
         activate,
         cx,
@@ -998,7 +958,6 @@ async fn do_switch_worktree(
     previous_state: PreviousWorkspaceState,
     workspace: WeakEntity<Workspace>,
     window_handle: Option<gpui::WindowHandle<MultiWorkspace>>,
-    remote_connection_options: Option<RemoteConnectionOptions>,
     cx: &mut AsyncWindowContext,
 ) -> anyhow::Result<Entity<Workspace>> {
     let path_remapping: Vec<(PathBuf, PathBuf)> = git_repo_work_dirs
@@ -1018,7 +977,6 @@ async fn do_switch_worktree(
         previous_state,
         workspace,
         window_handle,
-        remote_connection_options,
         WorktreeOperation::Switch,
         // Switching is always an explicit, foreground user action.
         true,
@@ -1029,7 +987,7 @@ async fn do_switch_worktree(
 
 /// Core workspace opening logic shared by both create and switch flows.
 /// Returns the newly opened workspace entity so callers can do post-open
-/// work (e.g., the `create_thread` agent tool spawns a thread inside it).
+/// work.
 async fn open_worktree_workspace(
     all_paths: Vec<PathBuf>,
     path_remapping: Vec<(PathBuf, PathBuf)>,
@@ -1038,7 +996,6 @@ async fn open_worktree_workspace(
     previous_state: PreviousWorkspaceState,
     workspace: WeakEntity<Workspace>,
     window_handle: Option<gpui::WindowHandle<MultiWorkspace>>,
-    remote_connection_options: Option<RemoteConnectionOptions>,
     operation: WorktreeOperation,
     activate: bool,
     cx: &mut AsyncWindowContext,
@@ -1050,11 +1007,10 @@ async fn open_worktree_workspace(
 
     let is_creating_new_worktree = matches!(operation, WorktreeOperation::Create);
 
-    // When `activate` is false the new workspace is opened in the background
-    // (e.g. the agent's `create_thread` tool), so it should be a clean
-    // checkout rather than inheriting the source workspace's open files and
-    // dock layout. The state transfer only applies when we're foregrounding
-    // a freshly-created worktree for the user.
+    // When `activate` is false the new workspace is opened in the background,
+    // so it should be a clean checkout rather than inheriting the source
+    // workspace's open files and dock layout. The state transfer only applies
+    // when we're foregrounding a freshly-created worktree for the user.
     let transfer_state = is_creating_new_worktree && activate;
 
     let source_for_transfer = if transfer_state {
@@ -1062,56 +1018,39 @@ async fn open_worktree_workspace(
     } else {
         None
     };
-
-    let (workspace_task, modal_workspace) =
-        window_handle.update(cx, |multi_workspace, window, cx| {
-            let path_list = util::path_list::PathList::new(&all_paths);
-            let active_workspace = multi_workspace.workspace().clone();
-            let modal_workspace = active_workspace.clone();
-
-            let init: Option<
-                Box<
-                    dyn FnOnce(&mut Workspace, &mut gpui::Window, &mut gpui::Context<Workspace>)
-                        + Send,
-                >,
-            > = if transfer_state {
-                let dock_structure = previous_state.dock_structure;
-                Some(Box::new(
-                    move |workspace: &mut Workspace,
-                          window: &mut gpui::Window,
-                          cx: &mut gpui::Context<Workspace>| {
-                        workspace.set_dock_structure(dock_structure, window, cx);
-                    },
-                ))
-            } else {
-                None
-            };
-
-            let task = multi_workspace.find_or_create_workspace_with_source_workspace(
-                path_list,
-                remote_connection_options,
-                None,
-                move |connection_options, window, cx| {
-                    remote_connection::connect_with_modal(
-                        &active_workspace,
-                        connection_options,
-                        window,
-                        cx,
-                    )
+    let workspace_task = window_handle.update(cx, |multi_workspace, window, cx| {
+        let path_list = util::path_list::PathList::new(&all_paths);
+        let init: Option<
+            Box<
+                dyn FnOnce(&mut Workspace, &mut gpui::Window, &mut gpui::Context<Workspace>)
+                    + Send,
+            >,
+        > = if transfer_state {
+            let dock_structure = previous_state.dock_structure;
+            Some(Box::new(
+                move |workspace: &mut Workspace,
+                      window: &mut gpui::Window,
+                      cx: &mut gpui::Context<Workspace>| {
+                    workspace.set_dock_structure(dock_structure, window, cx);
                 },
-                &[],
-                init,
-                OpenMode::Add,
-                source_for_transfer.clone(),
-                window,
-                cx,
-            );
-            (task, modal_workspace)
-        })?;
+            ))
+        } else {
+            None
+        };
 
-    let result = workspace_task.await;
-    remote_connection::dismiss_connection_modal(&modal_workspace, cx);
-    let new_workspace = result?;
+        multi_workspace.find_or_create_local_workspace_with_source_workspace(
+            path_list,
+            None,
+            &[],
+            init,
+            OpenMode::Add,
+            source_for_transfer.clone(),
+            window,
+            cx,
+        )
+    })?;
+
+    let new_workspace = workspace_task.await?;
 
     let panels_task = new_workspace.update(cx, |workspace, _cx| workspace.take_panels_task());
 
@@ -1320,7 +1259,6 @@ mod tests {
             ProjectSettings::register(cx);
             WorktreeSettings::register(cx);
             WorkspaceSettings::register(cx);
-            TaskStore::init(None);
         });
     }
 

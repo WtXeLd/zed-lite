@@ -155,32 +155,6 @@ impl Editor {
         self.selections.pending_anchor().is_some() || self.columnar_selection_state.is_some()
     }
 
-    pub fn set_selections_from_remote(
-        &mut self,
-        selections: Vec<Selection<Anchor>>,
-        pending_selection: Option<Selection<Anchor>>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let old_cursor_position = self.selections.newest_anchor().head();
-        self.selections
-            .change_with(&self.display_snapshot(cx), |s| {
-                s.select_anchors(selections);
-                if let Some(pending_selection) = pending_selection {
-                    s.set_pending(pending_selection, SelectMode::Character);
-                } else {
-                    s.clear_pending();
-                }
-            });
-        self.selections_did_change(
-            false,
-            &old_cursor_position,
-            SelectionEffects::default(),
-            window,
-            cx,
-        );
-    }
-
     pub fn set_mark(&mut self, _: &actions::SetMark, window: &mut Window, cx: &mut Context<Self>) {
         if self.selection_mark_mode {
             self.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {
@@ -1489,7 +1463,7 @@ impl Editor {
 
         let selection_anchors = self.selections.disjoint_anchors_arc();
 
-        if self.focus_handle.is_focused(window) && self.leader_id.is_none() {
+        if self.focus_handle.is_focused(window) {
             self.buffer.update(cx, |buffer, cx| {
                 buffer.set_active_selections(
                     &selection_anchors,
@@ -1584,7 +1558,6 @@ impl Editor {
             self.refresh_selected_text_highlights(&display_map, false, window, cx);
             self.refresh_matching_bracket_highlights(&display_map, cx);
             self.refresh_outline_symbols_at_cursor(cx);
-            self.update_visible_edit_prediction(window, cx);
             self.hide_blame_popover(true, cx);
             if self.git_blame_inline_enabled {
                 self.start_inline_blame_timer(window, cx);

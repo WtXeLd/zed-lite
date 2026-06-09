@@ -60,13 +60,11 @@ pub enum CliRequest {
         urls: Vec<String>,
         diff_paths: Vec<[String; 2]>,
         diff_all: bool,
-        wsl: Option<String>,
         wait: bool,
         #[serde(default)]
         open_behavior: OpenBehavior,
         env: Option<HashMap<String, String>>,
         user_data_dir: Option<String>,
-        dev_container: bool,
         #[serde(default)]
         cwd: Option<PathBuf>,
     },

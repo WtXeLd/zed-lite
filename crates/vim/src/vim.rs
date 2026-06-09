@@ -924,22 +924,6 @@ impl Vim {
             Vim::action(editor, cx, |vim, _: &Tab, window, cx| {
                 vim.input_ignored(" ".into(), window, cx)
             });
-            Vim::action(
-                editor,
-                cx,
-                |vim, action: &editor::actions::AcceptEditPrediction, window, cx| {
-                    vim.update_editor(cx, |_, editor, cx| {
-                        editor.accept_edit_prediction(action, window, cx);
-                    });
-                    // In non-insertion modes, predictions will be hidden and instead a jump will be
-                    // displayed (and performed by `accept_edit_prediction`). This switches to
-                    // insert mode so that the prediction is displayed after the jump.
-                    match vim.mode {
-                        Mode::Replace => {}
-                        _ => vim.switch_mode(Mode::Insert, true, window, cx),
-                    };
-                },
-            );
             Vim::action(editor, cx, |vim, _: &Enter, window, cx| {
                 vim.input_ignored("\n".into(), window, cx)
             });
@@ -1520,8 +1504,6 @@ impl Vim {
         if editor_mode.is_full()
             && !newest_selection_empty
             && self.mode == Mode::Normal
-            // When following someone, don't switch vim mode.
-            && editor.leader_id().is_none()
         {
             if preserve_selection {
                 self.switch_mode(Mode::Visual, true, window, cx);
@@ -1956,10 +1938,6 @@ impl Vim {
     fn local_selections_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(editor) = self.editor() else { return };
 
-        if editor.read(cx).leader_id().is_some() {
-            return;
-        }
-
         let newest = editor.read(cx).selections.newest_anchor().clone();
         let is_multicursor = editor.read(cx).selections.count() > 1;
         if self.mode == Mode::Insert && self.current_tx.is_some() {
@@ -2204,15 +2182,6 @@ impl Vim {
                     self.multi_replace(text, window, cx)
                 }
 
-                if self.mode == Mode::Normal {
-                    self.update_editor(cx, |_, editor, cx| {
-                        editor.accept_edit_prediction(
-                            &editor::actions::AcceptEditPrediction {},
-                            window,
-                            cx,
-                        );
-                    });
-                }
             }
         }
     }
@@ -2235,16 +2204,13 @@ impl Vim {
             autoindent: self.should_autoindent(),
             cursor_offset_on_selection: self.mode.has_selection(),
             line_mode: matches!(self.mode, Mode::VisualLine),
-            hide_edit_predictions: !matches!(self.mode, Mode::Insert | Mode::Replace)
-                && !(self.mode.is_normal()
-                    && VimSettings::get_global(cx).show_edit_predictions_in_normal_mode),
         }
     }
 
     fn sync_vim_settings_to_editor(
         state: &VimEditorSettingsState,
         editor: &mut Editor,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Editor>,
     ) {
         editor.set_cursor_shape(state.cursor_shape, cx);
@@ -2255,7 +2221,6 @@ impl Vim {
         editor.set_autoindent(state.autoindent);
         editor.set_cursor_offset_on_selection(state.cursor_offset_on_selection);
         editor.selections.set_line_mode(state.line_mode);
-        editor.set_edit_predictions_hidden_for_vim_mode(state.hide_edit_predictions, window, cx);
     }
 
     fn set_status_label(&mut self, label: impl Into<SharedString>, cx: &mut Context<Editor>) {
@@ -2273,7 +2238,6 @@ struct VimEditorSettingsState {
     autoindent: bool,
     cursor_offset_on_selection: bool,
     line_mode: bool,
-    hide_edit_predictions: bool,
 }
 
 #[derive(Clone, RegisterSetting)]
@@ -2287,7 +2251,6 @@ struct VimSettings {
     pub custom_digraphs: HashMap<String, Arc<str>>,
     pub highlight_on_yank_duration: u64,
     pub cursor_shape: CursorShapeSettings,
-    pub show_edit_predictions_in_normal_mode: bool,
 }
 
 /// Cursor shape configuration for insert mode.
@@ -2375,7 +2338,6 @@ impl Settings for VimSettings {
             custom_digraphs: vim.custom_digraphs.unwrap(),
             highlight_on_yank_duration: vim.highlight_on_yank_duration.unwrap(),
             cursor_shape: vim.cursor_shape.unwrap().into(),
-            show_edit_predictions_in_normal_mode: vim.show_edit_predictions_in_normal_mode.unwrap(),
         }
     }
 }

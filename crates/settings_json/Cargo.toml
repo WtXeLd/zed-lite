@@ -12,6 +12,8 @@ workspace = true
 path = "src/settings_json.rs"
 
 [features]
+lite = []
+test-support = []
 default = []
 
 [dependencies]

@@ -13,6 +13,7 @@ path = "src/mermaid_render.rs"
 doctest = false
 
 [features]
+lite = []
 test-support = []
 
 [dependencies]

@@ -1,11 +1,19 @@
-use async_tungstenite::tungstenite::Message as WebSocketMessage;
 use futures::{SinkExt as _, StreamExt as _};
+
+#[derive(Clone, Debug)]
+pub enum WireMessage {
+    Binary(Vec<u8>),
+    Ping(Vec<u8>),
+    Pong(Vec<u8>),
+    Close,
+    Other,
+}
 
 pub struct Connection {
     pub(crate) tx:
-        Box<dyn 'static + Send + Unpin + futures::Sink<WebSocketMessage, Error = anyhow::Error>>,
+        Box<dyn 'static + Send + Unpin + futures::Sink<WireMessage, Error = anyhow::Error>>,
     pub(crate) rx:
-        Box<dyn 'static + Send + Unpin + futures::Stream<Item = anyhow::Result<WebSocketMessage>>>,
+        Box<dyn 'static + Send + Unpin + futures::Stream<Item = anyhow::Result<WireMessage>>>,
 }
 
 impl Connection {
@@ -14,8 +22,8 @@ impl Connection {
         S: 'static
             + Send
             + Unpin
-            + futures::Sink<WebSocketMessage, Error = anyhow::Error>
-            + futures::Stream<Item = anyhow::Result<WebSocketMessage>>,
+            + futures::Sink<WireMessage, Error = anyhow::Error>
+            + futures::Stream<Item = anyhow::Result<WireMessage>>,
     {
         let (tx, rx) = stream.split();
         Self {
@@ -24,7 +32,7 @@ impl Connection {
         }
     }
 
-    pub async fn send(&mut self, message: WebSocketMessage) -> anyhow::Result<()> {
+    pub async fn send(&mut self, message: WireMessage) -> anyhow::Result<()> {
         self.tx.send(message).await
     }
 
@@ -51,14 +59,14 @@ impl Connection {
             killed: Arc<AtomicBool>,
             executor: gpui::BackgroundExecutor,
         ) -> (
-            Box<dyn Send + Unpin + futures::Sink<WebSocketMessage, Error = anyhow::Error>>,
-            Box<dyn Send + Unpin + futures::Stream<Item = anyhow::Result<WebSocketMessage>>>,
+            Box<dyn Send + Unpin + futures::Sink<WireMessage, Error = anyhow::Error>>,
+            Box<dyn Send + Unpin + futures::Stream<Item = anyhow::Result<WireMessage>>>,
         ) {
             use anyhow::anyhow;
             use futures::channel::mpsc;
             use std::io::Error;
 
-            let (tx, rx) = mpsc::unbounded::<WebSocketMessage>();
+            let (tx, rx) = mpsc::unbounded::<WireMessage>();
 
             let tx = tx.sink_map_err(|error| anyhow!(error)).with({
                 let killed = killed.clone();

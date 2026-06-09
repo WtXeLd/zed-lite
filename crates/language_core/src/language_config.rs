@@ -32,11 +32,6 @@ pub struct LanguageConfig {
     pub name: LanguageName,
     /// The name of this language for a Markdown code fence block
     pub code_fence_block_name: Option<Arc<str>>,
-    /// Alternative language names that Jupyter kernels may report for this language.
-    /// Used when a kernel's `language` field differs from Zed's language name.
-    /// For example, the Nu extension would set this to `["nushell"]`.
-    #[serde(default)]
-    pub kernel_language_names: Vec<Arc<str>>,
     // The name of the grammar in a WASM bundle (experimental).
     pub grammar: Option<Arc<str>>,
     /// The criteria for matching this language to a given file.
@@ -163,7 +158,6 @@ impl Default for LanguageConfig {
         Self {
             name: LanguageName::new_static(""),
             code_fence_block_name: None,
-            kernel_language_names: Default::default(),
             grammar: None,
             matcher: LanguageMatcher::default(),
             brackets: Default::default(),

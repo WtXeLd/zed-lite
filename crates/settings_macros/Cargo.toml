@@ -13,6 +13,8 @@ proc-macro = true
 workspace = true
 
 [features]
+lite = []
+test-support = []
 default = []
 
 [dependencies]

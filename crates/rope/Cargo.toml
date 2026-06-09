@@ -11,6 +11,10 @@ workspace = true
 [lib]
 path = "src/rope.rs"
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 heapless.workspace = true
 log.workspace = true

@@ -4,8 +4,7 @@ use feature_flags::FeatureFlagAppExt;
 use futures::{AsyncReadExt, TryStreamExt};
 use gpui::{App, AppContext, TaskExt};
 use http_client::{AsyncBody, HttpClient, Request};
-use project::Project;
-use proto::{CrashReport, GetCrashFilesResponse};
+use proto::CrashReport;
 use reqwest::{
     Method,
     multipart::{Form, Part},
@@ -42,44 +41,6 @@ pub fn init(client: Arc<Client>, cx: &mut App) {
         })
         .detach()
     }
-
-    cx.observe_new(move |project: &mut Project, _, cx| {
-        let client = client.clone();
-
-        let Some(remote_client) = project.remote_client() else {
-            return;
-        };
-        remote_client.update(cx, |remote_client, cx| {
-            if !client.telemetry().diagnostics_enabled() {
-                return;
-            }
-            let request = remote_client
-                .proto_client()
-                .request(proto::GetCrashFiles {});
-            cx.background_spawn(async move {
-                let GetCrashFilesResponse { crashes } = request.await?;
-
-                let Some(endpoint) = MINIDUMP_ENDPOINT.as_ref() else {
-                    return Ok(());
-                };
-                for CrashReport {
-                    metadata,
-                    minidump_contents,
-                } in crashes
-                {
-                    if let Some(metadata) = serde_json::from_str(&metadata).log_err() {
-                        upload_minidump(client.clone(), endpoint, minidump_contents, &metadata)
-                            .await
-                            .log_err();
-                    }
-                }
-
-                anyhow::Ok(())
-            })
-            .detach_and_log_err(cx);
-        })
-    })
-    .detach();
 }
 
 pub async fn upload_previous_minidumps(client: Arc<Client>) -> anyhow::Result<()> {

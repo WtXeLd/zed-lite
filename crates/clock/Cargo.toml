@@ -13,6 +13,7 @@ path = "src/clock.rs"
 doctest = false
 
 [features]
+lite = []
 test-support = ["dep:parking_lot"]
 
 [dependencies]

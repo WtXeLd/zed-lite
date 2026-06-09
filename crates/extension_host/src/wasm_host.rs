@@ -4,12 +4,9 @@ use crate::capability_granter::CapabilityGranter;
 use crate::{ExtensionManifest, ExtensionSettings};
 use anyhow::{Context as _, Result, anyhow, bail};
 use async_trait::async_trait;
-use dap::{DebugRequest, StartDebuggingRequestArgumentsRequest};
 use extension::{
-    CodeLabel, Command, Completion, ContextServerConfiguration, DebugAdapterBinary,
-    DebugTaskDefinition, ExtensionCapability, ExtensionHostProxy, KeyValueStoreDelegate,
-    ProjectDelegate, SlashCommand, SlashCommandArgumentCompletion, SlashCommandOutput, Symbol,
-    WorktreeDelegate,
+    CodeLabel, Command, Completion, ExtensionCapability, ExtensionHostProxy, KeyValueStoreDelegate,
+    SlashCommand, SlashCommandArgumentCompletion, SlashCommandOutput, Symbol, WorktreeDelegate,
 };
 use fs::Fs;
 use futures::future::LocalBoxFuture;
@@ -36,7 +33,6 @@ use std::{
     sync::{Arc, LazyLock, OnceLock},
     time::Duration,
 };
-use task::{DebugScenario, SpawnInTerminal, TaskTemplate, ZedDebugConfig};
 use util::paths::SanitizedPath;
 use wasmtime::{
     CacheStore, Engine, Store,
@@ -348,52 +344,6 @@ impl extension::Extension for WasmExtension {
         .await?
     }
 
-    async fn context_server_command(
-        &self,
-        context_server_id: Arc<str>,
-        project: Arc<dyn ProjectDelegate>,
-    ) -> Result<Command> {
-        self.call(|extension, store| {
-            async move {
-                let project_resource = store.data_mut().table.push(project)?;
-                let command = extension
-                    .call_context_server_command(store, context_server_id.clone(), project_resource)
-                    .await?
-                    .map_err(|err| store.data().extension_error(err))?;
-                anyhow::Ok(command.into())
-            }
-            .boxed()
-        })
-        .await?
-    }
-
-    async fn context_server_configuration(
-        &self,
-        context_server_id: Arc<str>,
-        project: Arc<dyn ProjectDelegate>,
-    ) -> Result<Option<ContextServerConfiguration>> {
-        self.call(|extension, store| {
-            async move {
-                let project_resource = store.data_mut().table.push(project)?;
-                let Some(configuration) = extension
-                    .call_context_server_configuration(
-                        store,
-                        context_server_id.clone(),
-                        project_resource,
-                    )
-                    .await?
-                    .map_err(|err| store.data().extension_error(err))?
-                else {
-                    return Ok(None);
-                };
-
-                Ok(Some(configuration.try_into()?))
-            }
-            .boxed()
-        })
-        .await?
-    }
-
     async fn suggest_docs_packages(&self, provider: Arc<str>) -> Result<Vec<String>> {
         self.call(|extension, store| {
             async move {
@@ -435,98 +385,6 @@ impl extension::Extension for WasmExtension {
         .await?
     }
 
-    async fn get_dap_binary(
-        &self,
-        dap_name: Arc<str>,
-        config: DebugTaskDefinition,
-        user_installed_path: Option<PathBuf>,
-        worktree: Arc<dyn WorktreeDelegate>,
-    ) -> Result<DebugAdapterBinary> {
-        self.call(|extension, store| {
-            async move {
-                let resource = store.data_mut().table.push(worktree)?;
-                let dap_binary = extension
-                    .call_get_dap_binary(store, dap_name, config, user_installed_path, resource)
-                    .await?
-                    .map_err(|err| store.data().extension_error(err))?;
-                let dap_binary = dap_binary.try_into()?;
-                Ok(dap_binary)
-            }
-            .boxed()
-        })
-        .await?
-    }
-    async fn dap_request_kind(
-        &self,
-        dap_name: Arc<str>,
-        config: serde_json::Value,
-    ) -> Result<StartDebuggingRequestArgumentsRequest> {
-        self.call(|extension, store| {
-            async move {
-                let kind = extension
-                    .call_dap_request_kind(store, dap_name, config)
-                    .await?
-                    .map_err(|err| store.data().extension_error(err))?;
-                Ok(kind.into())
-            }
-            .boxed()
-        })
-        .await?
-    }
-
-    async fn dap_config_to_scenario(&self, config: ZedDebugConfig) -> Result<DebugScenario> {
-        self.call(|extension, store| {
-            async move {
-                let kind = extension
-                    .call_dap_config_to_scenario(store, config)
-                    .await?
-                    .map_err(|err| store.data().extension_error(err))?;
-                Ok(kind)
-            }
-            .boxed()
-        })
-        .await?
-    }
-
-    async fn dap_locator_create_scenario(
-        &self,
-        locator_name: String,
-        build_config_template: TaskTemplate,
-        resolved_label: String,
-        debug_adapter_name: String,
-    ) -> Result<Option<DebugScenario>> {
-        self.call(|extension, store| {
-            async move {
-                extension
-                    .call_dap_locator_create_scenario(
-                        store,
-                        locator_name,
-                        build_config_template,
-                        resolved_label,
-                        debug_adapter_name,
-                    )
-                    .await
-            }
-            .boxed()
-        })
-        .await?
-    }
-    async fn run_dap_locator(
-        &self,
-        locator_name: String,
-        config: SpawnInTerminal,
-    ) -> Result<DebugRequest> {
-        self.call(|extension, store| {
-            async move {
-                extension
-                    .call_run_dap_locator(store, locator_name, config)
-                    .await?
-                    .map_err(|err| store.data().extension_error(err))
-            }
-            .boxed()
-        })
-        .await?
-    }
 }
 
 pub struct WasmState {

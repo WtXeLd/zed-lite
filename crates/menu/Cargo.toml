@@ -12,5 +12,9 @@ workspace = true
 path = "src/menu.rs"
 doctest = false
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 gpui.workspace = true

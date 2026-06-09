@@ -8,6 +8,10 @@ license = "GPL-3.0-or-later"
 [lints]
 workspace = true
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 gpui.workspace = true
 semver.workspace = true

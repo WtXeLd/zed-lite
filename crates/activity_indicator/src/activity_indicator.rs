@@ -1,4 +1,3 @@
-use auto_update::DismissMessage;
 use editor::Editor;
 use extension_host::{ExtensionOperation, ExtensionStore};
 use futures::StreamExt;
@@ -32,7 +31,9 @@ actions!(
     activity_indicator,
     [
         /// Displays error messages from language servers in the status bar.
-        ShowErrorMessage
+        ShowErrorMessage,
+        /// Dismisses the current status message.
+        DismissMessage
     ]
 );
 
@@ -296,7 +297,12 @@ impl ActivityIndicator {
         });
     }
 
-    fn dismiss_message(&mut self, _: &DismissMessage, _: &mut Window, cx: &mut Context<Self>) {
+    fn dismiss_message(
+        &mut self,
+        _: &DismissMessage,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.project.update(cx, |project, cx| {
             if project.last_formatting_failure(cx).is_some() {
                 project.reset_last_formatting_failure(cx);
@@ -381,22 +387,6 @@ impl ActivityIndicator {
                     tooltip_message: None,
                 });
             }
-        }
-
-        if let Some(session) = self
-            .project
-            .read(cx)
-            .dap_store()
-            .read(cx)
-            .sessions()
-            .find(|s| !s.read(cx).is_started())
-        {
-            return Some(Content {
-                icon: ActivityIcon::LoadingSpinner,
-                message: format!("Debug: {}", session.read(cx).adapter()),
-                tooltip_message: session.read(cx).label().map(|label| label.to_string()),
-                on_click: None,
-            });
         }
 
         let current_job = self
@@ -631,7 +621,7 @@ impl ActivityIndicator {
                 icon,
                 message,
                 on_click: Some(Arc::new(|this, window, cx| {
-                    this.dismiss_message(&Default::default(), window, cx)
+                    this.dismiss_message(&DismissMessage, window, cx)
                 })),
                 tooltip_message: None,
             });

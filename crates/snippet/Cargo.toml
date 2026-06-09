@@ -12,6 +12,10 @@ workspace = true
 path = "src/snippet.rs"
 doctest = false
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 anyhow.workspace = true
 smallvec.workspace = true

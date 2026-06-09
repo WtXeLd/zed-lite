@@ -12,6 +12,10 @@ workspace = true
 path = "src/tab_switcher.rs"
 doctest = false
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 collections.workspace = true
 editor.workspace = true

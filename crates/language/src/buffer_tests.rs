@@ -3392,7 +3392,7 @@ async fn test_preview_edits(cx: &mut TestAppContext) {
 }
 
 #[gpui::test(iterations = 100)]
-fn test_random_collaboration(cx: &mut App, mut rng: StdRng) {
+fn test_random_concurrent_edits(cx: &mut App, mut rng: StdRng) {
     let min_peers = env::var("MIN_PEERS")
         .map(|i| i.parse().expect("invalid `MIN_PEERS` variable"))
         .unwrap_or(1);

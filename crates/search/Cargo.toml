@@ -6,6 +6,7 @@ publish.workspace = true
 license = "GPL-3.0-or-later"
 
 [features]
+lite = []
 test-support = [
 
     "editor/test-support",

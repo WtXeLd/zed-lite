@@ -1,0 +1,100 @@
+name: build_lite
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - v*
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  bundle_linux_x86_64:
+    name: Linux x86_64
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: ./script/linux
+
+      - name: Download WASI SDK
+        run: ./script/download-wasi-sdk
+
+      - name: Build Zed Lite
+        run: ./script/bundle-linux
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zed-lite-linux-x86_64
+          path: target/release/zed-lite-linux-x86_64.tar.gz
+          if-no-files-found: error
+
+  bundle_macos_aarch64:
+    name: macOS aarch64
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Download WASI SDK
+        run: ./script/download-wasi-sdk
+
+      - name: Build Zed Lite
+        run: ./script/bundle-mac aarch64-apple-darwin
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zed-lite-macos-aarch64
+          path: target/aarch64-apple-darwin/release/Zed-Lite-aarch64.dmg
+          if-no-files-found: error
+
+  bundle_macos_x86_64:
+    name: macOS x86_64
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Download WASI SDK
+        run: ./script/download-wasi-sdk
+
+      - name: Build Zed Lite
+        run: ./script/bundle-mac x86_64-apple-darwin
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zed-lite-macos-x86_64
+          path: target/x86_64-apple-darwin/release/Zed-Lite-x86_64.dmg
+          if-no-files-found: error
+
+  bundle_windows_x86_64:
+    name: Windows x86_64
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Zed Lite
+        run: script/bundle-windows.ps1 -Architecture x86_64
+        shell: pwsh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zed-lite-windows-x86_64
+          path: target/zed-lite-windows-x86_64.zip
+          if-no-files-found: error

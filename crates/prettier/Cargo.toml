@@ -13,6 +13,7 @@ path = "src/prettier.rs"
 doctest = false
 
 [features]
+lite = []
 test-support = []
 
 [dependencies]

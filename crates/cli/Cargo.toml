@@ -17,6 +17,8 @@ name = "cli"
 path = "src/main.rs"
 
 [features]
+lite = []
+test-support = []
 no-bundled-uninstall = []
 default = []
 

@@ -12,6 +12,10 @@ workspace = true
 path = "src/theme_selector.rs"
 doctest = false
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 fs.workspace = true
 fuzzy.workspace = true

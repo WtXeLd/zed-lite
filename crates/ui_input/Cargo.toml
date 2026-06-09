@@ -17,4 +17,6 @@ gpui.workspace = true
 ui.workspace = true
 
 [features]
+lite = []
+test-support = []
 default = []

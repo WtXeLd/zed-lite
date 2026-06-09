@@ -12,6 +12,10 @@ workspace = true
 path = "src/which_key.rs"
 doctest = false
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 command_palette.workspace = true
 gpui.workspace = true

@@ -12,6 +12,7 @@ workspace = true
 path = "src/markdown_preview.rs"
 
 [features]
+lite = []
 test-support = []
 
 [dependencies]

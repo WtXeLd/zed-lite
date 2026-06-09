@@ -11,5 +11,9 @@ workspace = true
 [lib]
 path = "src/env_var.rs"
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 gpui_shared_string.workspace = true

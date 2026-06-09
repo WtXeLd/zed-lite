@@ -16,15 +16,8 @@ pub use serde_json;
 // that we may want to shadow to provide a cleaner Rust API.
 pub use wit::{
     CodeLabel, CodeLabelSpan, CodeLabelSpanLiteral, Command, DownloadedFileType, EnvVars,
-    KeyValueStore, LanguageServerInstallationStatus, Project, Range, Worktree, download_file,
+    KeyValueStore, LanguageServerInstallationStatus, Range, Worktree, download_file,
     make_file_executable,
-    zed::extension::context_server::ContextServerConfiguration,
-    zed::extension::dap::{
-        AttachRequest, BuildTaskDefinition, BuildTaskDefinitionTemplatePayload, BuildTaskTemplate,
-        DebugAdapterBinary, DebugConfig, DebugRequest, DebugScenario, DebugTaskDefinition,
-        LaunchRequest, StartDebuggingRequestArguments, StartDebuggingRequestArgumentsRequest,
-        TaskTemplate, TcpArguments, TcpArgumentsTemplate, resolve_tcp_template,
-    },
     zed::extension::github::{
         GithubRelease, GithubReleaseAsset, GithubReleaseOptions, github_release_by_tag_name,
         latest_github_release,
@@ -179,24 +172,6 @@ pub trait Extension: Send + Sync {
         Err("`run_slash_command` not implemented".to_string())
     }
 
-    /// Returns the command used to start a context server.
-    fn context_server_command(
-        &mut self,
-        _context_server_id: &ContextServerId,
-        _project: &Project,
-    ) -> Result<Command> {
-        Err("`context_server_command` not implemented".to_string())
-    }
-
-    /// Returns the configuration options for the specified context server.
-    fn context_server_configuration(
-        &mut self,
-        _context_server_id: &ContextServerId,
-        _project: &Project,
-    ) -> Result<Option<ContextServerConfiguration>> {
-        Ok(None)
-    }
-
     /// Returns a list of package names as suggestions to be included in the
     /// search results of the `/docs` slash command.
     ///
@@ -214,72 +189,6 @@ pub trait Extension: Send + Sync {
         _database: &KeyValueStore,
     ) -> Result<(), String> {
         Err("`index_docs` not implemented".to_string())
-    }
-
-    /// Returns the debug adapter binary for the specified adapter name and configuration.
-    fn get_dap_binary(
-        &mut self,
-        _adapter_name: String,
-        _config: DebugTaskDefinition,
-        _user_provided_debug_adapter_path: Option<String>,
-        _worktree: &Worktree,
-    ) -> Result<DebugAdapterBinary, String> {
-        Err("`get_dap_binary` not implemented".to_string())
-    }
-
-    /// Determines whether the specified adapter configuration should *launch* a new debuggee process
-    /// or *attach* to an existing one. This function should not perform any further validation (outside of determining the kind of a request).
-    /// This function should return an error when the kind cannot be determined (rather than fall back to a known default).
-    fn dap_request_kind(
-        &mut self,
-        _adapter_name: String,
-        _config: serde_json::Value,
-    ) -> Result<StartDebuggingRequestArgumentsRequest, String> {
-        Err("`dap_request_kind` not implemented".to_string())
-    }
-    /// Converts a high-level definition of a debug scenario (originating in a new session UI) to a "low-level" configuration suitable for a particular adapter.
-    ///
-    /// In layman's terms: given a program, list of arguments, current working directory and environment variables,
-    /// create a configuration that can be used to start a debug session.
-    fn dap_config_to_scenario(&mut self, _config: DebugConfig) -> Result<DebugScenario, String> {
-        Err("`dap_config_to_scenario` not implemented".to_string())
-    }
-
-    /// Locators are entities that convert a Zed task into a debug scenario.
-    ///
-    /// They can be provided even by extensions that don't provide a debug adapter.
-    /// For all tasks applicable to a given buffer, Zed will query all locators to find one that can turn the task into a debug scenario.
-    /// A converted debug scenario can include a build task (it shouldn't contain any configuration in such case); a build task result will later
-    /// be resolved with [`Extension::run_dap_locator`].
-    ///
-    /// To work through a real-world example, take a `cargo run` task and a hypothetical `cargo` locator:
-    /// 1. We may need to modify the task; in this case, it is problematic that `cargo run` spawns a binary. We should turn `cargo run` into a debug scenario with
-    ///    `cargo build` task. This is the decision we make at `dap_locator_create_scenario` scope.
-    /// 2. Then, after the build task finishes, we will run `run_dap_locator` of the locator that produced the build task to find the program to be debugged. This function
-    ///    should give us a debugger-agnostic configuration for launching a debug target (that we end up resolving with [`Extension::dap_config_to_scenario`]). It's almost as if the user
-    ///    found the artifact path by themselves.
-    ///
-    /// Note that you're not obliged to use build tasks with locators. Specifically, it is sufficient to provide a debug configuration directly in the return value of
-    /// `dap_locator_create_scenario` if you're able to do that. Make sure to not fill out `build` field in that case, as that will prevent Zed from running second phase of resolution in such case.
-    /// This might be of particular relevance to interpreted languages.
-    fn dap_locator_create_scenario(
-        &mut self,
-        _locator_name: String,
-        _build_task: TaskTemplate,
-        _resolved_label: String,
-        _debug_adapter_name: String,
-    ) -> Option<DebugScenario> {
-        None
-    }
-
-    /// Runs the second phase of locator resolution.
-    /// See [`Extension::dap_locator_create_scenario`] for a hefty comment on locators.
-    fn run_dap_locator(
-        &mut self,
-        _locator_name: String,
-        _build_task: TaskTemplate,
-    ) -> Result<DebugRequest, String> {
-        Err("`run_dap_locator` not implemented".to_string())
     }
 }
 
@@ -491,22 +400,6 @@ impl wit::Guest for Component {
         extension().run_slash_command(command, args, worktree)
     }
 
-    fn context_server_command(
-        context_server_id: String,
-        project: &Project,
-    ) -> Result<wit::Command> {
-        let context_server_id = ContextServerId(context_server_id);
-        extension().context_server_command(&context_server_id, project)
-    }
-
-    fn context_server_configuration(
-        context_server_id: String,
-        project: &Project,
-    ) -> Result<Option<ContextServerConfiguration>, String> {
-        let context_server_id = ContextServerId(context_server_id);
-        extension().context_server_configuration(&context_server_id, project)
-    }
-
     fn suggest_docs_packages(provider: String) -> Result<Vec<String>, String> {
         extension().suggest_docs_packages(provider)
     }
@@ -519,46 +412,6 @@ impl wit::Guest for Component {
         extension().index_docs(provider, package, database)
     }
 
-    fn get_dap_binary(
-        adapter_name: String,
-        config: DebugTaskDefinition,
-        user_installed_path: Option<String>,
-        worktree: &Worktree,
-    ) -> Result<wit::DebugAdapterBinary, String> {
-        extension().get_dap_binary(adapter_name, config, user_installed_path, worktree)
-    }
-
-    fn dap_request_kind(
-        adapter_name: String,
-        config: String,
-    ) -> Result<StartDebuggingRequestArgumentsRequest, String> {
-        extension().dap_request_kind(
-            adapter_name,
-            serde_json::from_str(&config).map_err(|e| format!("Failed to parse config: {e}"))?,
-        )
-    }
-    fn dap_config_to_scenario(config: DebugConfig) -> Result<DebugScenario, String> {
-        extension().dap_config_to_scenario(config)
-    }
-    fn dap_locator_create_scenario(
-        locator_name: String,
-        build_task: TaskTemplate,
-        resolved_label: String,
-        debug_adapter_name: String,
-    ) -> Option<DebugScenario> {
-        extension().dap_locator_create_scenario(
-            locator_name,
-            build_task,
-            resolved_label,
-            debug_adapter_name,
-        )
-    }
-    fn run_dap_locator(
-        locator_name: String,
-        build_task: TaskTemplate,
-    ) -> Result<DebugRequest, String> {
-        extension().run_dap_locator(locator_name, build_task)
-    }
 }
 
 /// The ID of a language server.
@@ -578,28 +431,6 @@ impl AsRef<str> for LanguageServerId {
 }
 
 impl fmt::Display for LanguageServerId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-/// The ID of a context server.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
-pub struct ContextServerId(String);
-
-impl ContextServerId {
-    pub fn new(value: String) -> Self {
-        Self(value)
-    }
-}
-
-impl AsRef<str> for ContextServerId {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for ContextServerId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }

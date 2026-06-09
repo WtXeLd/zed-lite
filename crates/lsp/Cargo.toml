@@ -13,6 +13,7 @@ path = "src/lsp.rs"
 doctest = false
 
 [features]
+lite = []
 test-support = ["async-pipe", "gpui_util"]
 
 [dependencies]

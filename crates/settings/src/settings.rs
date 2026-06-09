@@ -129,7 +129,77 @@ pub fn init(cx: &mut App) {
 }
 
 pub fn default_settings() -> Cow<'static, str> {
-    asset_str::<SettingsAssets>("settings/default.json")
+    #[cfg(feature = "lite")]
+    {
+        lite_default_settings()
+    }
+
+    #[cfg(not(feature = "lite"))]
+    {
+        asset_str::<SettingsAssets>("settings/default.json")
+    }
+}
+
+#[cfg(feature = "lite")]
+fn lite_default_settings() -> Cow<'static, str> {
+    let default_settings = asset_str::<SettingsAssets>("settings/default.json");
+    let mut default_settings =
+        settings_json::parse_json_with_comments::<serde_json::Value>(default_settings.as_ref())
+            .unwrap_or_else(|error| panic!("failed to parse bundled default settings: {error}"));
+    prune_lite_default_settings(&mut default_settings);
+    serde_json::to_string_pretty(&default_settings)
+        .unwrap_or_else(|error| panic!("failed to serialize lite default settings: {error}"))
+        .into()
+}
+
+#[cfg(feature = "lite")]
+fn prune_lite_default_settings(settings: &mut serde_json::Value) {
+    const ROOT_KEYS: &[&str] = &[
+        "audio",
+        "auto_update",
+        "calls",
+        "credentials_url",
+        "instrumentation",
+        "journal",
+        "server_url",
+    ];
+
+    remove_object_keys(Some(settings), ROOT_KEYS);
+    remove_language_settings_keys(settings);
+}
+
+#[cfg(feature = "lite")]
+fn remove_language_settings_keys(settings: &mut serde_json::Value) {
+    const LANGUAGE_KEYS: &[&str] = &[];
+
+    remove_object_keys(Some(settings), LANGUAGE_KEYS);
+
+    if let Some(languages) = settings
+        .pointer_mut("/languages")
+        .and_then(|value| value.as_object_mut())
+    {
+        for language_settings in languages.values_mut() {
+            remove_object_keys(Some(language_settings), LANGUAGE_KEYS);
+        }
+    }
+
+    for override_key in ["dev", "nightly", "preview", "stable", "linux", "macos", "windows"] {
+        if let Some(override_settings) = settings.pointer_mut(&format!("/{override_key}")) {
+            remove_object_keys(Some(override_settings), &["instrumentation"]);
+            remove_language_settings_keys(override_settings);
+        }
+    }
+}
+
+#[cfg(feature = "lite")]
+fn remove_object_keys(value: Option<&mut serde_json::Value>, keys: &[&str]) {
+    let Some(object) = value.and_then(|value| value.as_object_mut()) else {
+        return;
+    };
+
+    for key in keys {
+        object.remove(*key);
+    }
 }
 
 pub fn default_semantic_token_rules() -> Cow<'static, str> {
@@ -173,12 +243,4 @@ pub fn initial_keymap_content() -> Cow<'static, str> {
 
 pub fn initial_tasks_content() -> Cow<'static, str> {
     asset_str::<SettingsAssets>("settings/initial_tasks.json")
-}
-
-pub fn initial_debug_tasks_content() -> Cow<'static, str> {
-    asset_str::<SettingsAssets>("settings/initial_debug_tasks.json")
-}
-
-pub fn initial_local_debug_tasks_content() -> Cow<'static, str> {
-    asset_str::<SettingsAssets>("settings/initial_local_debug_tasks.json")
 }

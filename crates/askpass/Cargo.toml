@@ -11,6 +11,10 @@ workspace = true
 [lib]
 path = "src/askpass.rs"
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 anyhow.workspace = true
 futures.workspace = true

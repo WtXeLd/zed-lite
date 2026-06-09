@@ -18,6 +18,8 @@ log.workspace = true
 text.workspace = true
 
 [features]
+lite = []
+test-support = []
 dev-tools = []
 
 [lints]

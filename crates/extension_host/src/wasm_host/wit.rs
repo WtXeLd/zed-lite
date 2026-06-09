@@ -1,28 +1,16 @@
-mod since_v0_0_1;
-mod since_v0_0_4;
-mod since_v0_0_6;
-mod since_v0_1_0;
-mod since_v0_2_0;
-mod since_v0_3_0;
-mod since_v0_4_0;
-mod since_v0_5_0;
-mod since_v0_6_0;
 mod since_v0_8_0;
-use dap::DebugRequest;
-use extension::{DebugTaskDefinition, KeyValueStoreDelegate, WorktreeDelegate};
+
+use extension::{KeyValueStoreDelegate, WorktreeDelegate};
 use gpui::BackgroundExecutor;
 use language::LanguageName;
 use lsp::LanguageServerName;
 use release_channel::ReleaseChannel;
-use task::{DebugScenario, SpawnInTerminal, TaskTemplate, ZedDebugConfig};
-
-use latest::dap::StartDebuggingRequestArgumentsRequest;
 
 use super::{WasmState, wasm_engine};
-use anyhow::{Context as _, Result, anyhow};
+use anyhow::{Context as _, Result};
 use semver::Version;
 use since_v0_8_0 as latest;
-use std::{ops::RangeInclusive, path::PathBuf, sync::Arc};
+use std::{ops::RangeInclusive, sync::Arc};
 use wasmtime::{
     Store,
     component::{Component, Linker, Resource},
@@ -31,14 +19,12 @@ use wasmtime::{
 #[cfg(test)]
 pub use latest::CodeLabelSpanLiteral;
 pub use latest::{
-    CodeLabel, CodeLabelSpan, Command, DebugAdapterBinary, ExtensionProject, Range, SlashCommand,
-    zed::extension::context_server::ContextServerConfiguration,
+    CodeLabel, CodeLabelSpan, Command, Range, SlashCommand,
     zed::extension::lsp::{
         Completion, CompletionKind, CompletionLabelDetails, InsertTextFormat, Symbol, SymbolKind,
     },
     zed::extension::slash_command::{SlashCommandArgumentCompletion, SlashCommandOutput},
 };
-pub use since_v0_0_4::LanguageServerConfig;
 
 pub fn new_linker(
     executor: &BackgroundExecutor,
@@ -50,58 +36,18 @@ pub fn new_linker(
     linker
 }
 
-/// Returns whether the given Wasm API version is supported by the Wasm host.
 pub fn is_supported_wasm_api_version(release_channel: ReleaseChannel, version: Version) -> bool {
     wasm_api_version_range(release_channel).contains(&version)
 }
 
-/// Returns the Wasm API version range that is supported by the Wasm host.
 #[inline(always)]
 pub fn wasm_api_version_range(release_channel: ReleaseChannel) -> RangeInclusive<Version> {
-    // Note: The release channel can be used to stage a new version of the extension API.
     let _ = release_channel;
-
-    let max_version = match release_channel {
-        ReleaseChannel::Dev | ReleaseChannel::Nightly => latest::MAX_VERSION,
-        ReleaseChannel::Stable | ReleaseChannel::Preview => since_v0_6_0::MAX_VERSION,
-    };
-
-    since_v0_0_1::MIN_VERSION..=max_version
-}
-
-/// Authorizes access to use unreleased versions of the Wasm API, based on the provided [`ReleaseChannel`].
-///
-/// Note: If there isn't currently an unreleased Wasm API version this function may be unused. Don't delete it!
-pub fn authorize_access_to_unreleased_wasm_api_version(
-    release_channel: ReleaseChannel,
-) -> Result<()> {
-    let allow_unreleased_version = match release_channel {
-        ReleaseChannel::Dev | ReleaseChannel::Nightly => true,
-        ReleaseChannel::Stable | ReleaseChannel::Preview => {
-            // We always allow the latest in tests so that the extension tests pass on release branches.
-            cfg!(any(test, feature = "test-support"))
-        }
-    };
-
-    anyhow::ensure!(
-        allow_unreleased_version,
-        "unreleased versions of the extension API can only be used on development builds of Zed"
-    );
-
-    Ok(())
+    latest::MIN_VERSION..=latest::MAX_VERSION
 }
 
 pub enum Extension {
     V0_8_0(since_v0_8_0::Extension),
-    V0_6_0(since_v0_6_0::Extension),
-    V0_5_0(since_v0_5_0::Extension),
-    V0_4_0(since_v0_4_0::Extension),
-    V0_3_0(since_v0_3_0::Extension),
-    V0_2_0(since_v0_2_0::Extension),
-    V0_1_0(since_v0_1_0::Extension),
-    V0_0_6(since_v0_0_6::Extension),
-    V0_0_4(since_v0_0_4::Extension),
-    V0_0_1(since_v0_0_1::Extension),
 }
 
 impl Extension {
@@ -112,113 +58,22 @@ impl Extension {
         version: Version,
         component: &Component,
     ) -> Result<Self> {
-        // Note: The release channel can be used to stage a new version of the extension API.
         let _ = release_channel;
+        anyhow::ensure!(
+            version >= latest::MIN_VERSION,
+            "Wasm extension API versions before v0.8.0 are not supported in lite builds"
+        );
 
-        if version >= latest::MIN_VERSION {
-            authorize_access_to_unreleased_wasm_api_version(release_channel)?;
-
-            let extension =
-                latest::Extension::instantiate_async(store, component, latest::linker(executor))
-                    .await
-                    .context("failed to instantiate wasm extension")?;
-            Ok(Self::V0_8_0(extension))
-        } else if version >= since_v0_6_0::MIN_VERSION {
-            let extension = since_v0_6_0::Extension::instantiate_async(
-                store,
-                component,
-                since_v0_6_0::linker(executor),
-            )
-            .await
-            .context("failed to instantiate wasm extension")?;
-            Ok(Self::V0_6_0(extension))
-        } else if version >= since_v0_5_0::MIN_VERSION {
-            let extension = since_v0_5_0::Extension::instantiate_async(
-                store,
-                component,
-                since_v0_5_0::linker(executor),
-            )
-            .await
-            .context("failed to instantiate wasm extension")?;
-            Ok(Self::V0_5_0(extension))
-        } else if version >= since_v0_4_0::MIN_VERSION {
-            let extension = since_v0_4_0::Extension::instantiate_async(
-                store,
-                component,
-                since_v0_4_0::linker(executor),
-            )
-            .await
-            .context("failed to instantiate wasm extension")?;
-            Ok(Self::V0_4_0(extension))
-        } else if version >= since_v0_3_0::MIN_VERSION {
-            let extension = since_v0_3_0::Extension::instantiate_async(
-                store,
-                component,
-                since_v0_3_0::linker(executor),
-            )
-            .await
-            .context("failed to instantiate wasm extension")?;
-            Ok(Self::V0_3_0(extension))
-        } else if version >= since_v0_2_0::MIN_VERSION {
-            let extension = since_v0_2_0::Extension::instantiate_async(
-                store,
-                component,
-                since_v0_2_0::linker(executor),
-            )
-            .await
-            .context("failed to instantiate wasm extension")?;
-            Ok(Self::V0_2_0(extension))
-        } else if version >= since_v0_1_0::MIN_VERSION {
-            let extension = since_v0_1_0::Extension::instantiate_async(
-                store,
-                component,
-                since_v0_1_0::linker(executor),
-            )
-            .await
-            .context("failed to instantiate wasm extension")?;
-            Ok(Self::V0_1_0(extension))
-        } else if version >= since_v0_0_6::MIN_VERSION {
-            let extension = since_v0_0_6::Extension::instantiate_async(
-                store,
-                component,
-                since_v0_0_6::linker(executor),
-            )
-            .await
-            .context("failed to instantiate wasm extension")?;
-            Ok(Self::V0_0_6(extension))
-        } else if version >= since_v0_0_4::MIN_VERSION {
-            let extension = since_v0_0_4::Extension::instantiate_async(
-                store,
-                component,
-                since_v0_0_4::linker(executor),
-            )
-            .await
-            .context("failed to instantiate wasm extension")?;
-            Ok(Self::V0_0_4(extension))
-        } else {
-            let extension = since_v0_0_1::Extension::instantiate_async(
-                store,
-                component,
-                since_v0_0_1::linker(executor),
-            )
-            .await
-            .context("failed to instantiate wasm extension")?;
-            Ok(Self::V0_0_1(extension))
-        }
+        let extension =
+            latest::Extension::instantiate_async(store, component, latest::linker(executor))
+                .await
+                .context("failed to instantiate wasm extension")?;
+        Ok(Self::V0_8_0(extension))
     }
 
     pub async fn call_init_extension(&self, store: &mut Store<WasmState>) -> Result<()> {
         match self {
             Extension::V0_8_0(ext) => ext.call_init_extension(store).await,
-            Extension::V0_6_0(ext) => ext.call_init_extension(store).await,
-            Extension::V0_5_0(ext) => ext.call_init_extension(store).await,
-            Extension::V0_4_0(ext) => ext.call_init_extension(store).await,
-            Extension::V0_3_0(ext) => ext.call_init_extension(store).await,
-            Extension::V0_2_0(ext) => ext.call_init_extension(store).await,
-            Extension::V0_1_0(ext) => ext.call_init_extension(store).await,
-            Extension::V0_0_6(ext) => ext.call_init_extension(store).await,
-            Extension::V0_0_4(ext) => ext.call_init_extension(store).await,
-            Extension::V0_0_1(ext) => ext.call_init_extension(store).await,
         }
     }
 
@@ -229,62 +84,12 @@ impl Extension {
         language_name: &LanguageName,
         resource: Resource<Arc<dyn WorktreeDelegate>>,
     ) -> Result<Result<Command, String>> {
+        let _ = language_name;
         match self {
             Extension::V0_8_0(ext) => {
                 ext.call_language_server_command(store, &language_server_id.0, resource)
                     .await
             }
-            Extension::V0_6_0(ext) => {
-                ext.call_language_server_command(store, &language_server_id.0, resource)
-                    .await
-            }
-            Extension::V0_5_0(ext) => {
-                ext.call_language_server_command(store, &language_server_id.0, resource)
-                    .await
-            }
-            Extension::V0_4_0(ext) => {
-                ext.call_language_server_command(store, &language_server_id.0, resource)
-                    .await
-            }
-            Extension::V0_3_0(ext) => {
-                ext.call_language_server_command(store, &language_server_id.0, resource)
-                    .await
-            }
-            Extension::V0_2_0(ext) => Ok(ext
-                .call_language_server_command(store, &language_server_id.0, resource)
-                .await?
-                .map(|command| command.into())),
-            Extension::V0_1_0(ext) => Ok(ext
-                .call_language_server_command(store, &language_server_id.0, resource)
-                .await?
-                .map(|command| command.into())),
-            Extension::V0_0_6(ext) => Ok(ext
-                .call_language_server_command(store, &language_server_id.0, resource)
-                .await?
-                .map(|command| command.into())),
-            Extension::V0_0_4(ext) => Ok(ext
-                .call_language_server_command(
-                    store,
-                    &LanguageServerConfig {
-                        name: language_server_id.0.to_string(),
-                        language_name: language_name.to_string(),
-                    },
-                    resource,
-                )
-                .await?
-                .map(|command| command.into())),
-            Extension::V0_0_1(ext) => Ok(ext
-                .call_language_server_command(
-                    store,
-                    &LanguageServerConfig {
-                        name: language_server_id.0.to_string(),
-                        language_name: language_name.to_string(),
-                    }
-                    .into(),
-                    resource,
-                )
-                .await?
-                .map(|command| command.into())),
         }
     }
 
@@ -295,90 +100,12 @@ impl Extension {
         language_name: &LanguageName,
         resource: Resource<Arc<dyn WorktreeDelegate>>,
     ) -> Result<Result<Option<String>, String>> {
+        let _ = language_name;
         match self {
             Extension::V0_8_0(ext) => {
                 ext.call_language_server_initialization_options(
                     store,
                     &language_server_id.0,
-                    resource,
-                )
-                .await
-            }
-            Extension::V0_6_0(ext) => {
-                ext.call_language_server_initialization_options(
-                    store,
-                    &language_server_id.0,
-                    resource,
-                )
-                .await
-            }
-            Extension::V0_5_0(ext) => {
-                ext.call_language_server_initialization_options(
-                    store,
-                    &language_server_id.0,
-                    resource,
-                )
-                .await
-            }
-            Extension::V0_4_0(ext) => {
-                ext.call_language_server_initialization_options(
-                    store,
-                    &language_server_id.0,
-                    resource,
-                )
-                .await
-            }
-            Extension::V0_3_0(ext) => {
-                ext.call_language_server_initialization_options(
-                    store,
-                    &language_server_id.0,
-                    resource,
-                )
-                .await
-            }
-            Extension::V0_2_0(ext) => {
-                ext.call_language_server_initialization_options(
-                    store,
-                    &language_server_id.0,
-                    resource,
-                )
-                .await
-            }
-            Extension::V0_1_0(ext) => {
-                ext.call_language_server_initialization_options(
-                    store,
-                    &language_server_id.0,
-                    resource,
-                )
-                .await
-            }
-            Extension::V0_0_6(ext) => {
-                ext.call_language_server_initialization_options(
-                    store,
-                    &language_server_id.0,
-                    resource,
-                )
-                .await
-            }
-            Extension::V0_0_4(ext) => {
-                ext.call_language_server_initialization_options(
-                    store,
-                    &LanguageServerConfig {
-                        name: language_server_id.0.to_string(),
-                        language_name: language_name.to_string(),
-                    },
-                    resource,
-                )
-                .await
-            }
-            Extension::V0_0_1(ext) => {
-                ext.call_language_server_initialization_options(
-                    store,
-                    &LanguageServerConfig {
-                        name: language_server_id.0.to_string(),
-                        language_name: language_name.to_string(),
-                    }
-                    .into(),
                     resource,
                 )
                 .await
@@ -401,63 +128,6 @@ impl Extension {
                 )
                 .await
             }
-            Extension::V0_6_0(ext) => {
-                ext.call_language_server_workspace_configuration(
-                    store,
-                    &language_server_id.0,
-                    resource,
-                )
-                .await
-            }
-            Extension::V0_5_0(ext) => {
-                ext.call_language_server_workspace_configuration(
-                    store,
-                    &language_server_id.0,
-                    resource,
-                )
-                .await
-            }
-            Extension::V0_4_0(ext) => {
-                ext.call_language_server_workspace_configuration(
-                    store,
-                    &language_server_id.0,
-                    resource,
-                )
-                .await
-            }
-            Extension::V0_3_0(ext) => {
-                ext.call_language_server_workspace_configuration(
-                    store,
-                    &language_server_id.0,
-                    resource,
-                )
-                .await
-            }
-            Extension::V0_2_0(ext) => {
-                ext.call_language_server_workspace_configuration(
-                    store,
-                    &language_server_id.0,
-                    resource,
-                )
-                .await
-            }
-            Extension::V0_1_0(ext) => {
-                ext.call_language_server_workspace_configuration(
-                    store,
-                    &language_server_id.0,
-                    resource,
-                )
-                .await
-            }
-            Extension::V0_0_6(ext) => {
-                ext.call_language_server_workspace_configuration(
-                    store,
-                    &language_server_id.0,
-                    resource,
-                )
-                .await
-            }
-            Extension::V0_0_4(_) | Extension::V0_0_1(_) => Ok(Ok(None)),
         }
     }
 
@@ -476,15 +146,6 @@ impl Extension {
                 )
                 .await
             }
-            Extension::V0_6_0(_)
-            | Extension::V0_5_0(_)
-            | Extension::V0_4_0(_)
-            | Extension::V0_3_0(_)
-            | Extension::V0_2_0(_)
-            | Extension::V0_1_0(_)
-            | Extension::V0_0_6(_)
-            | Extension::V0_0_4(_)
-            | Extension::V0_0_1(_) => Ok(None),
         }
     }
 
@@ -503,15 +164,6 @@ impl Extension {
                 )
                 .await
             }
-            Extension::V0_6_0(_)
-            | Extension::V0_5_0(_)
-            | Extension::V0_4_0(_)
-            | Extension::V0_3_0(_)
-            | Extension::V0_2_0(_)
-            | Extension::V0_1_0(_)
-            | Extension::V0_0_6(_)
-            | Extension::V0_0_4(_)
-            | Extension::V0_0_1(_) => Ok(None),
         }
     }
 
@@ -532,39 +184,6 @@ impl Extension {
                 )
                 .await
             }
-            Extension::V0_6_0(ext) => {
-                ext.call_language_server_additional_initialization_options(
-                    store,
-                    &language_server_id.0,
-                    &target_language_server_id.0,
-                    resource,
-                )
-                .await
-            }
-            Extension::V0_5_0(ext) => {
-                ext.call_language_server_additional_initialization_options(
-                    store,
-                    &language_server_id.0,
-                    &target_language_server_id.0,
-                    resource,
-                )
-                .await
-            }
-            Extension::V0_4_0(ext) => {
-                ext.call_language_server_additional_initialization_options(
-                    store,
-                    &language_server_id.0,
-                    &target_language_server_id.0,
-                    resource,
-                )
-                .await
-            }
-            Extension::V0_3_0(_)
-            | Extension::V0_2_0(_)
-            | Extension::V0_1_0(_)
-            | Extension::V0_0_6(_)
-            | Extension::V0_0_4(_)
-            | Extension::V0_0_1(_) => Ok(Ok(None)),
         }
     }
 
@@ -585,39 +204,6 @@ impl Extension {
                 )
                 .await
             }
-            Extension::V0_6_0(ext) => {
-                ext.call_language_server_additional_workspace_configuration(
-                    store,
-                    &language_server_id.0,
-                    &target_language_server_id.0,
-                    resource,
-                )
-                .await
-            }
-            Extension::V0_5_0(ext) => {
-                ext.call_language_server_additional_workspace_configuration(
-                    store,
-                    &language_server_id.0,
-                    &target_language_server_id.0,
-                    resource,
-                )
-                .await
-            }
-            Extension::V0_4_0(ext) => {
-                ext.call_language_server_additional_workspace_configuration(
-                    store,
-                    &language_server_id.0,
-                    &target_language_server_id.0,
-                    resource,
-                )
-                .await
-            }
-            Extension::V0_3_0(_)
-            | Extension::V0_2_0(_)
-            | Extension::V0_1_0(_)
-            | Extension::V0_0_6(_)
-            | Extension::V0_0_4(_)
-            | Extension::V0_0_1(_) => Ok(Ok(None)),
         }
     }
 
@@ -632,98 +218,6 @@ impl Extension {
                 ext.call_labels_for_completions(store, &language_server_id.0, &completions)
                     .await
             }
-            Extension::V0_6_0(ext) => Ok(ext
-                .call_labels_for_completions(
-                    store,
-                    &language_server_id.0,
-                    &completions.into_iter().map(Into::into).collect::<Vec<_>>(),
-                )
-                .await?
-                .map(|labels| {
-                    labels
-                        .into_iter()
-                        .map(|label| label.map(Into::into))
-                        .collect()
-                })),
-            Extension::V0_5_0(ext) => Ok(ext
-                .call_labels_for_completions(
-                    store,
-                    &language_server_id.0,
-                    &completions.into_iter().map(Into::into).collect::<Vec<_>>(),
-                )
-                .await?
-                .map(|labels| {
-                    labels
-                        .into_iter()
-                        .map(|label| label.map(Into::into))
-                        .collect()
-                })),
-            Extension::V0_4_0(ext) => Ok(ext
-                .call_labels_for_completions(
-                    store,
-                    &language_server_id.0,
-                    &completions.into_iter().map(Into::into).collect::<Vec<_>>(),
-                )
-                .await?
-                .map(|labels| {
-                    labels
-                        .into_iter()
-                        .map(|label| label.map(Into::into))
-                        .collect()
-                })),
-            Extension::V0_3_0(ext) => Ok(ext
-                .call_labels_for_completions(
-                    store,
-                    &language_server_id.0,
-                    &completions.into_iter().map(Into::into).collect::<Vec<_>>(),
-                )
-                .await?
-                .map(|labels| {
-                    labels
-                        .into_iter()
-                        .map(|label| label.map(Into::into))
-                        .collect()
-                })),
-            Extension::V0_2_0(ext) => Ok(ext
-                .call_labels_for_completions(
-                    store,
-                    &language_server_id.0,
-                    &completions.into_iter().map(Into::into).collect::<Vec<_>>(),
-                )
-                .await?
-                .map(|labels| {
-                    labels
-                        .into_iter()
-                        .map(|label| label.map(Into::into))
-                        .collect()
-                })),
-            Extension::V0_1_0(ext) => Ok(ext
-                .call_labels_for_completions(
-                    store,
-                    &language_server_id.0,
-                    &completions.into_iter().map(Into::into).collect::<Vec<_>>(),
-                )
-                .await?
-                .map(|labels| {
-                    labels
-                        .into_iter()
-                        .map(|label| label.map(Into::into))
-                        .collect()
-                })),
-            Extension::V0_0_6(ext) => Ok(ext
-                .call_labels_for_completions(
-                    store,
-                    &language_server_id.0,
-                    &completions.into_iter().map(Into::into).collect::<Vec<_>>(),
-                )
-                .await?
-                .map(|labels| {
-                    labels
-                        .into_iter()
-                        .map(|label| label.map(Into::into))
-                        .collect()
-                })),
-            Extension::V0_0_1(_) | Extension::V0_0_4(_) => Ok(Ok(Vec::new())),
         }
     }
 
@@ -738,98 +232,6 @@ impl Extension {
                 ext.call_labels_for_symbols(store, &language_server_id.0, &symbols)
                     .await
             }
-            Extension::V0_6_0(ext) => Ok(ext
-                .call_labels_for_symbols(
-                    store,
-                    &language_server_id.0,
-                    &symbols.into_iter().map(Into::into).collect::<Vec<_>>(),
-                )
-                .await?
-                .map(|labels| {
-                    labels
-                        .into_iter()
-                        .map(|label| label.map(Into::into))
-                        .collect()
-                })),
-            Extension::V0_5_0(ext) => Ok(ext
-                .call_labels_for_symbols(
-                    store,
-                    &language_server_id.0,
-                    &symbols.into_iter().map(Into::into).collect::<Vec<_>>(),
-                )
-                .await?
-                .map(|labels| {
-                    labels
-                        .into_iter()
-                        .map(|label| label.map(Into::into))
-                        .collect()
-                })),
-            Extension::V0_4_0(ext) => Ok(ext
-                .call_labels_for_symbols(
-                    store,
-                    &language_server_id.0,
-                    &symbols.into_iter().map(Into::into).collect::<Vec<_>>(),
-                )
-                .await?
-                .map(|labels| {
-                    labels
-                        .into_iter()
-                        .map(|label| label.map(Into::into))
-                        .collect()
-                })),
-            Extension::V0_3_0(ext) => Ok(ext
-                .call_labels_for_symbols(
-                    store,
-                    &language_server_id.0,
-                    &symbols.into_iter().map(Into::into).collect::<Vec<_>>(),
-                )
-                .await?
-                .map(|labels| {
-                    labels
-                        .into_iter()
-                        .map(|label| label.map(Into::into))
-                        .collect()
-                })),
-            Extension::V0_2_0(ext) => Ok(ext
-                .call_labels_for_symbols(
-                    store,
-                    &language_server_id.0,
-                    &symbols.into_iter().map(Into::into).collect::<Vec<_>>(),
-                )
-                .await?
-                .map(|labels| {
-                    labels
-                        .into_iter()
-                        .map(|label| label.map(Into::into))
-                        .collect()
-                })),
-            Extension::V0_1_0(ext) => Ok(ext
-                .call_labels_for_symbols(
-                    store,
-                    &language_server_id.0,
-                    &symbols.into_iter().map(Into::into).collect::<Vec<_>>(),
-                )
-                .await?
-                .map(|labels| {
-                    labels
-                        .into_iter()
-                        .map(|label| label.map(Into::into))
-                        .collect()
-                })),
-            Extension::V0_0_6(ext) => Ok(ext
-                .call_labels_for_symbols(
-                    store,
-                    &language_server_id.0,
-                    &symbols.into_iter().map(Into::into).collect::<Vec<_>>(),
-                )
-                .await?
-                .map(|labels| {
-                    labels
-                        .into_iter()
-                        .map(|label| label.map(Into::into))
-                        .collect()
-                })),
-            Extension::V0_0_1(_) | Extension::V0_0_4(_) => Ok(Ok(Vec::new())),
         }
     }
 
@@ -843,33 +245,6 @@ impl Extension {
             Extension::V0_8_0(ext) => {
                 ext.call_complete_slash_command_argument(store, command, arguments)
                     .await
-            }
-            Extension::V0_6_0(ext) => {
-                ext.call_complete_slash_command_argument(store, command, arguments)
-                    .await
-            }
-            Extension::V0_5_0(ext) => {
-                ext.call_complete_slash_command_argument(store, command, arguments)
-                    .await
-            }
-            Extension::V0_4_0(ext) => {
-                ext.call_complete_slash_command_argument(store, command, arguments)
-                    .await
-            }
-            Extension::V0_3_0(ext) => {
-                ext.call_complete_slash_command_argument(store, command, arguments)
-                    .await
-            }
-            Extension::V0_2_0(ext) => {
-                ext.call_complete_slash_command_argument(store, command, arguments)
-                    .await
-            }
-            Extension::V0_1_0(ext) => {
-                ext.call_complete_slash_command_argument(store, command, arguments)
-                    .await
-            }
-            Extension::V0_0_1(_) | Extension::V0_0_4(_) | Extension::V0_0_6(_) => {
-                Ok(Ok(Vec::new()))
             }
         }
     }
@@ -886,104 +261,6 @@ impl Extension {
                 ext.call_run_slash_command(store, command, arguments, resource)
                     .await
             }
-            Extension::V0_6_0(ext) => {
-                ext.call_run_slash_command(store, command, arguments, resource)
-                    .await
-            }
-            Extension::V0_5_0(ext) => {
-                ext.call_run_slash_command(store, command, arguments, resource)
-                    .await
-            }
-            Extension::V0_4_0(ext) => {
-                ext.call_run_slash_command(store, command, arguments, resource)
-                    .await
-            }
-            Extension::V0_3_0(ext) => {
-                ext.call_run_slash_command(store, command, arguments, resource)
-                    .await
-            }
-            Extension::V0_2_0(ext) => {
-                ext.call_run_slash_command(store, command, arguments, resource)
-                    .await
-            }
-            Extension::V0_1_0(ext) => {
-                ext.call_run_slash_command(store, command, arguments, resource)
-                    .await
-            }
-            Extension::V0_0_1(_) | Extension::V0_0_4(_) | Extension::V0_0_6(_) => {
-                anyhow::bail!("`run_slash_command` not available prior to v0.1.0");
-            }
-        }
-    }
-
-    pub async fn call_context_server_command(
-        &self,
-        store: &mut Store<WasmState>,
-        context_server_id: Arc<str>,
-        project: Resource<ExtensionProject>,
-    ) -> Result<Result<Command, String>> {
-        match self {
-            Extension::V0_8_0(ext) => {
-                ext.call_context_server_command(store, &context_server_id, project)
-                    .await
-            }
-            Extension::V0_6_0(ext) => {
-                ext.call_context_server_command(store, &context_server_id, project)
-                    .await
-            }
-            Extension::V0_5_0(ext) => {
-                ext.call_context_server_command(store, &context_server_id, project)
-                    .await
-            }
-            Extension::V0_4_0(ext) => {
-                ext.call_context_server_command(store, &context_server_id, project)
-                    .await
-            }
-            Extension::V0_3_0(ext) => {
-                ext.call_context_server_command(store, &context_server_id, project)
-                    .await
-            }
-            Extension::V0_2_0(ext) => Ok(ext
-                .call_context_server_command(store, &context_server_id, project)
-                .await?
-                .map(Into::into)),
-            Extension::V0_0_1(_)
-            | Extension::V0_0_4(_)
-            | Extension::V0_0_6(_)
-            | Extension::V0_1_0(_) => {
-                anyhow::bail!("`context_server_command` not available prior to v0.2.0");
-            }
-        }
-    }
-
-    pub async fn call_context_server_configuration(
-        &self,
-        store: &mut Store<WasmState>,
-        context_server_id: Arc<str>,
-        project: Resource<ExtensionProject>,
-    ) -> Result<Result<Option<ContextServerConfiguration>, String>> {
-        match self {
-            Extension::V0_8_0(ext) => {
-                ext.call_context_server_configuration(store, &context_server_id, project)
-                    .await
-            }
-            Extension::V0_6_0(ext) => {
-                ext.call_context_server_configuration(store, &context_server_id, project)
-                    .await
-            }
-            Extension::V0_5_0(ext) => {
-                ext.call_context_server_configuration(store, &context_server_id, project)
-                    .await
-            }
-            Extension::V0_0_1(_)
-            | Extension::V0_0_4(_)
-            | Extension::V0_0_6(_)
-            | Extension::V0_1_0(_)
-            | Extension::V0_2_0(_)
-            | Extension::V0_3_0(_)
-            | Extension::V0_4_0(_) => {
-                anyhow::bail!("`context_server_configuration` not available prior to v0.5.0");
-            }
         }
     }
 
@@ -994,15 +271,6 @@ impl Extension {
     ) -> Result<Result<Vec<String>, String>> {
         match self {
             Extension::V0_8_0(ext) => ext.call_suggest_docs_packages(store, provider).await,
-            Extension::V0_6_0(ext) => ext.call_suggest_docs_packages(store, provider).await,
-            Extension::V0_5_0(ext) => ext.call_suggest_docs_packages(store, provider).await,
-            Extension::V0_4_0(ext) => ext.call_suggest_docs_packages(store, provider).await,
-            Extension::V0_3_0(ext) => ext.call_suggest_docs_packages(store, provider).await,
-            Extension::V0_2_0(ext) => ext.call_suggest_docs_packages(store, provider).await,
-            Extension::V0_1_0(ext) => ext.call_suggest_docs_packages(store, provider).await,
-            Extension::V0_0_1(_) | Extension::V0_0_4(_) | Extension::V0_0_6(_) => {
-                anyhow::bail!("`suggest_docs_packages` not available prior to v0.1.0");
-            }
         }
     }
 
@@ -1018,256 +286,9 @@ impl Extension {
                 ext.call_index_docs(store, provider, package_name, kv_store)
                     .await
             }
-            Extension::V0_6_0(ext) => {
-                ext.call_index_docs(store, provider, package_name, kv_store)
-                    .await
-            }
-            Extension::V0_5_0(ext) => {
-                ext.call_index_docs(store, provider, package_name, kv_store)
-                    .await
-            }
-            Extension::V0_4_0(ext) => {
-                ext.call_index_docs(store, provider, package_name, kv_store)
-                    .await
-            }
-            Extension::V0_3_0(ext) => {
-                ext.call_index_docs(store, provider, package_name, kv_store)
-                    .await
-            }
-            Extension::V0_2_0(ext) => {
-                ext.call_index_docs(store, provider, package_name, kv_store)
-                    .await
-            }
-            Extension::V0_1_0(ext) => {
-                ext.call_index_docs(store, provider, package_name, kv_store)
-                    .await
-            }
-            Extension::V0_0_1(_) | Extension::V0_0_4(_) | Extension::V0_0_6(_) => {
-                anyhow::bail!("`index_docs` not available prior to v0.1.0");
-            }
         }
     }
 
-    pub async fn call_get_dap_binary(
-        &self,
-        store: &mut Store<WasmState>,
-        adapter_name: Arc<str>,
-        task: DebugTaskDefinition,
-        user_installed_path: Option<PathBuf>,
-        resource: Resource<Arc<dyn WorktreeDelegate>>,
-    ) -> Result<Result<DebugAdapterBinary, String>> {
-        match self {
-            Extension::V0_8_0(ext) => {
-                let dap_binary = ext
-                    .call_get_dap_binary(
-                        store,
-                        &adapter_name,
-                        &task.try_into()?,
-                        user_installed_path.as_ref().and_then(|p| p.to_str()),
-                        resource,
-                    )
-                    .await?
-                    .map_err(|e| anyhow!("{e:?}"))?;
-
-                Ok(Ok(dap_binary))
-            }
-            Extension::V0_6_0(ext) => {
-                let task: latest::DebugTaskDefinition = task.try_into()?;
-                let dap_binary = ext
-                    .call_get_dap_binary(
-                        store,
-                        &adapter_name,
-                        &task.into(),
-                        user_installed_path.as_ref().and_then(|p| p.to_str()),
-                        resource,
-                    )
-                    .await?
-                    .map_err(|e| anyhow!("{e:?}"))?;
-
-                Ok(Ok(dap_binary.into()))
-            }
-            Extension::V0_5_0(_)
-            | Extension::V0_4_0(_)
-            | Extension::V0_3_0(_)
-            | Extension::V0_2_0(_)
-            | Extension::V0_1_0(_)
-            | Extension::V0_0_6(_)
-            | Extension::V0_0_4(_)
-            | Extension::V0_0_1(_) => {
-                anyhow::bail!("`get_dap_binary` not available prior to v0.6.0");
-            }
-        }
-    }
-
-    pub async fn call_dap_request_kind(
-        &self,
-        store: &mut Store<WasmState>,
-        adapter_name: Arc<str>,
-        config: serde_json::Value,
-    ) -> Result<Result<StartDebuggingRequestArgumentsRequest, String>> {
-        match self {
-            Extension::V0_8_0(ext) => {
-                let config =
-                    serde_json::to_string(&config).context("Adapter config is not a valid JSON")?;
-                let dap_binary = ext
-                    .call_dap_request_kind(store, &adapter_name, &config)
-                    .await?
-                    .map_err(|e| anyhow!("{e:?}"))?;
-
-                Ok(Ok(dap_binary))
-            }
-            Extension::V0_6_0(ext) => {
-                let config =
-                    serde_json::to_string(&config).context("Adapter config is not a valid JSON")?;
-                let dap_binary = ext
-                    .call_dap_request_kind(store, &adapter_name, &config)
-                    .await?
-                    .map_err(|e| anyhow!("{e:?}"))?;
-
-                Ok(Ok(dap_binary.into()))
-            }
-            Extension::V0_5_0(_)
-            | Extension::V0_4_0(_)
-            | Extension::V0_3_0(_)
-            | Extension::V0_2_0(_)
-            | Extension::V0_1_0(_)
-            | Extension::V0_0_6(_)
-            | Extension::V0_0_4(_)
-            | Extension::V0_0_1(_) => {
-                anyhow::bail!("`dap_request_kind` not available prior to v0.6.0");
-            }
-        }
-    }
-
-    pub async fn call_dap_config_to_scenario(
-        &self,
-        store: &mut Store<WasmState>,
-        config: ZedDebugConfig,
-    ) -> Result<Result<DebugScenario, String>> {
-        match self {
-            Extension::V0_8_0(ext) => {
-                let config = config.into();
-                let dap_binary = ext
-                    .call_dap_config_to_scenario(store, &config)
-                    .await?
-                    .map_err(|e| anyhow!("{e:?}"))?;
-
-                Ok(Ok(dap_binary.try_into()?))
-            }
-            Extension::V0_6_0(ext) => {
-                let config: latest::DebugConfig = config.into();
-                let dap_binary = ext
-                    .call_dap_config_to_scenario(store, &config.into())
-                    .await?
-                    .map_err(|e| anyhow!("{e:?}"))?;
-
-                let dap_binary: latest::DebugScenario = dap_binary.into();
-                Ok(Ok(dap_binary.try_into()?))
-            }
-            Extension::V0_5_0(_)
-            | Extension::V0_4_0(_)
-            | Extension::V0_3_0(_)
-            | Extension::V0_2_0(_)
-            | Extension::V0_1_0(_)
-            | Extension::V0_0_6(_)
-            | Extension::V0_0_4(_)
-            | Extension::V0_0_1(_) => {
-                anyhow::bail!("`dap_config_to_scenario` not available prior to v0.6.0");
-            }
-        }
-    }
-
-    pub async fn call_dap_locator_create_scenario(
-        &self,
-        store: &mut Store<WasmState>,
-        locator_name: String,
-        build_config_template: TaskTemplate,
-        resolved_label: String,
-        debug_adapter_name: String,
-    ) -> Result<Option<DebugScenario>> {
-        match self {
-            Extension::V0_8_0(ext) => {
-                let build_config_template = build_config_template.into();
-                let dap_binary = ext
-                    .call_dap_locator_create_scenario(
-                        store,
-                        &locator_name,
-                        &build_config_template,
-                        &resolved_label,
-                        &debug_adapter_name,
-                    )
-                    .await?;
-
-                Ok(dap_binary.map(TryInto::try_into).transpose()?)
-            }
-            Extension::V0_6_0(ext) => {
-                let build_config_template: latest::dap::TaskTemplate = build_config_template.into();
-                let dap_binary = ext
-                    .call_dap_locator_create_scenario(
-                        store,
-                        &locator_name,
-                        &build_config_template.into(),
-                        &resolved_label,
-                        &debug_adapter_name,
-                    )
-                    .await?;
-
-                Ok(dap_binary
-                    .map(|s| latest::DebugScenario::from(s).try_into())
-                    .transpose()?)
-            }
-            Extension::V0_5_0(_)
-            | Extension::V0_4_0(_)
-            | Extension::V0_3_0(_)
-            | Extension::V0_2_0(_)
-            | Extension::V0_1_0(_)
-            | Extension::V0_0_6(_)
-            | Extension::V0_0_4(_)
-            | Extension::V0_0_1(_) => {
-                anyhow::bail!("`dap_locator_create_scenario` not available prior to v0.6.0");
-            }
-        }
-    }
-
-    pub async fn call_run_dap_locator(
-        &self,
-        store: &mut Store<WasmState>,
-        locator_name: String,
-        resolved_build_task: SpawnInTerminal,
-    ) -> Result<Result<DebugRequest, String>> {
-        match self {
-            Extension::V0_8_0(ext) => {
-                let build_config_template = resolved_build_task.try_into()?;
-                let dap_request = ext
-                    .call_run_dap_locator(store, &locator_name, &build_config_template)
-                    .await?
-                    .map_err(|e| anyhow!("{e:?}"))?;
-
-                Ok(Ok(dap_request.into()))
-            }
-            Extension::V0_6_0(ext) => {
-                let build_config_template: latest::dap::TaskTemplate =
-                    resolved_build_task.try_into()?;
-                let dap_request = ext
-                    .call_run_dap_locator(store, &locator_name, &build_config_template.into())
-                    .await?
-                    .map_err(|e| anyhow!("{e:?}"))?;
-
-                let dap_request: latest::DebugRequest = dap_request.into();
-                Ok(Ok(dap_request.into()))
-            }
-            Extension::V0_5_0(_)
-            | Extension::V0_4_0(_)
-            | Extension::V0_3_0(_)
-            | Extension::V0_2_0(_)
-            | Extension::V0_1_0(_)
-            | Extension::V0_0_6(_)
-            | Extension::V0_0_4(_)
-            | Extension::V0_0_1(_) => {
-                anyhow::bail!("`run_dap_locator` not available prior to v0.6.0");
-            }
-        }
-    }
 }
 
 trait ToWasmtimeResult<T> {

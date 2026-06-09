@@ -114,7 +114,7 @@ fn collect_process_tree() -> anyhow::Result<Value> {
 /// Scrub a process's reported argv to avoid leaking environment-variable
 /// values. sysinfo's `Process::cmd()` on macOS goes through `KERN_PROCARGS2`
 /// and can include envp in addition to argv for some processes, which means
-/// the raw output can contain things like `ANTHROPIC_API_KEY=…`. We replace
+/// the raw output can contain things like `SECRET_API_KEY=...`. We replace
 /// any entry that matches a conservative env-var pattern (uppercase
 /// identifier ending in `=`) with `KEY=<redacted>`. If *every* entry got
 /// redacted then sysinfo's data for this process is too garbled to trust as
@@ -161,8 +161,8 @@ mod tests {
     #[test]
     fn redacts_secret_looking_env_vars() {
         assert_redacts(
-            "ANTHROPIC_API_KEY=sk-ant-api03-abcdef",
-            "ANTHROPIC_API_KEY=<redacted>",
+            "SECRET_API_KEY=abcdef",
+            "SECRET_API_KEY=<redacted>",
         );
         assert_redacts(
             "AWS_SECRET_ACCESS_KEY=anything-at-all",
@@ -202,7 +202,7 @@ mod tests {
         let cmd = vec![
             "FOO=1".to_string(),
             "BAR=2".to_string(),
-            "ANTHROPIC_API_KEY=secret".to_string(),
+            "SECRET_API_KEY=secret".to_string(),
         ];
         assert_eq!(sanitize_cmd(cmd), None);
     }
@@ -214,7 +214,7 @@ mod tests {
             "npm exec mcp-remote https://mcp.linear.app/mcp".to_string(),
             "ALACRITTY_WINDOW_ID=38654706047".to_string(),
             "AMP_FORCE_BEL=1".to_string(),
-            "ANTHROPIC_API_KEY=sk-ant-api03-realsecret".to_string(),
+            "SECRET_API_KEY=realsecret".to_string(),
         ];
         assert_eq!(
             sanitize_cmd(cmd),
@@ -222,7 +222,7 @@ mod tests {
                 "npm exec mcp-remote https://mcp.linear.app/mcp".to_string(),
                 "ALACRITTY_WINDOW_ID=<redacted>".to_string(),
                 "AMP_FORCE_BEL=<redacted>".to_string(),
-                "ANTHROPIC_API_KEY=<redacted>".to_string(),
+                "SECRET_API_KEY=<redacted>".to_string(),
             ])
         );
     }

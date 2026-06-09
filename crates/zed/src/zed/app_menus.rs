@@ -1,10 +1,7 @@
-use collab_ui::collab_panel;
 use gpui::{App, Menu, MenuItem, OsAction};
-use release_channel::ReleaseChannel;
 use terminal_view::terminal_panel;
-use zed_actions::{debug_panel, dev};
 
-pub fn app_menus(cx: &mut App) -> Vec<Menu> {
+pub fn app_menus(_cx: &mut App) -> Vec<Menu> {
     use zed_actions::Quit;
 
     let mut view_items = vec![
@@ -42,115 +39,114 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
         MenuItem::separator(),
         MenuItem::action("Project Panel", zed_actions::project_panel::ToggleFocus),
         MenuItem::action("Outline Panel", outline_panel::ToggleFocus),
-        MenuItem::action("Collab Panel", collab_panel::ToggleFocus),
         MenuItem::action("Terminal Panel", terminal_panel::ToggleFocus),
-        MenuItem::action("Debugger Panel", debug_panel::ToggleFocus),
-        MenuItem::separator(),
-        MenuItem::action("Diagnostics", diagnostics::Deploy),
-        MenuItem::separator(),
     ];
 
-    if ReleaseChannel::try_global(cx) == Some(ReleaseChannel::Dev) {
-        view_items.push(MenuItem::action(
-            "Toggle GPUI Inspector",
-            dev::ToggleInspector,
-        ));
-        view_items.push(MenuItem::separator());
-    }
+    view_items.push(MenuItem::separator());
+    view_items.push(MenuItem::action("Diagnostics", diagnostics::Deploy));
+    view_items.push(MenuItem::separator());
+
+    let mut zed_items = vec![MenuItem::action("About Zed", zed_actions::About)];
+    zed_items.extend([
+        MenuItem::submenu(Menu::new("Settings").items([
+            MenuItem::action("Open Settings", zed_actions::OpenSettings),
+            MenuItem::action("Open Settings File", super::OpenSettingsFile),
+            MenuItem::action("Open Project Settings", zed_actions::OpenProjectSettings),
+            MenuItem::action("Open Project Settings File", super::OpenProjectSettingsFile),
+            MenuItem::action("Open Default Settings", super::OpenDefaultSettings),
+            MenuItem::separator(),
+            MenuItem::action("Open Keymap", zed_actions::OpenKeymap),
+            MenuItem::action("Open Keymap File", zed_actions::OpenKeymapFile),
+            MenuItem::action("Open Default Key Bindings", zed_actions::OpenDefaultKeymap),
+            MenuItem::separator(),
+            MenuItem::action(
+                "Select Theme...",
+                zed_actions::theme_selector::Toggle::default(),
+            ),
+            MenuItem::action(
+                "Select Icon Theme...",
+                zed_actions::icon_theme_selector::Toggle::default(),
+            ),
+        ])),
+        MenuItem::separator(),
+    ]);
+    #[cfg(target_os = "macos")]
+    zed_items.push(MenuItem::os_submenu(
+        "Services",
+        gpui::SystemMenuType::Services,
+    ));
+    zed_items.push(MenuItem::separator());
+    zed_items.push(MenuItem::action(
+        "Extensions",
+        zed_actions::Extensions::default(),
+    ));
+    #[cfg(not(target_os = "windows"))]
+    zed_items.push(MenuItem::action(
+        "Install CLI",
+        install_cli::InstallCliBinary,
+    ));
+    zed_items.push(MenuItem::separator());
+    #[cfg(target_os = "macos")]
+    zed_items.push(MenuItem::action("Hide Zed", super::Hide));
+    #[cfg(target_os = "macos")]
+    zed_items.push(MenuItem::action("Hide Others", super::HideOthers));
+    #[cfg(target_os = "macos")]
+    zed_items.push(MenuItem::action("Show All", super::ShowAll));
+    zed_items.push(MenuItem::separator());
+    zed_items.push(MenuItem::action("Quit Zed", Quit));
+
+    let mut file_items = vec![
+        MenuItem::action("New", workspace::NewFile),
+        MenuItem::action("New Window", workspace::NewWindow),
+        MenuItem::separator(),
+    ];
+    #[cfg(not(target_os = "macos"))]
+    file_items.push(MenuItem::action("Open File...", workspace::OpenFiles));
+    file_items.extend([
+        MenuItem::action(
+            if cfg!(not(target_os = "macos")) {
+                "Open Folder..."
+            } else {
+                "Open…"
+            },
+            workspace::Open::default(),
+        ),
+        MenuItem::action(
+            "Open Recent...",
+            zed_actions::OpenRecent {
+                create_new_window: false,
+            },
+        ),
+    ]);
+    file_items.extend([
+        MenuItem::separator(),
+        MenuItem::action("Add Folder to Project…", workspace::AddFolderToProject),
+        MenuItem::separator(),
+        MenuItem::action("Save", workspace::Save { save_intent: None }),
+        MenuItem::action("Save As…", workspace::SaveAs),
+        MenuItem::action("Save All", workspace::SaveAll { save_intent: None }),
+        MenuItem::separator(),
+        MenuItem::action(
+            "Close Editor",
+            workspace::CloseActiveItem {
+                save_intent: None,
+                close_pinned: true,
+            },
+        ),
+        MenuItem::action("Close Project", workspace::CloseProject),
+        MenuItem::action("Close Window", workspace::CloseWindow),
+    ]);
 
     vec![
         Menu {
             name: "Zed".into(),
             disabled: false,
-            items: vec![
-                MenuItem::action("About Zed", zed_actions::About),
-                MenuItem::action("Check for Updates", auto_update::Check),
-                MenuItem::separator(),
-                MenuItem::submenu(Menu::new("Settings").items([
-                    MenuItem::action("Open Settings", zed_actions::OpenSettings),
-                    MenuItem::action("Open Settings File", super::OpenSettingsFile),
-                    MenuItem::action("Open Project Settings", zed_actions::OpenProjectSettings),
-                    MenuItem::action("Open Project Settings File", super::OpenProjectSettingsFile),
-                    MenuItem::action("Open Default Settings", super::OpenDefaultSettings),
-                    MenuItem::separator(),
-                    MenuItem::action("Open Keymap", zed_actions::OpenKeymap),
-                    MenuItem::action("Open Keymap File", zed_actions::OpenKeymapFile),
-                    MenuItem::action("Open Default Key Bindings", zed_actions::OpenDefaultKeymap),
-                    MenuItem::separator(),
-                    MenuItem::action(
-                        "Select Theme...",
-                        zed_actions::theme_selector::Toggle::default(),
-                    ),
-                    MenuItem::action(
-                        "Select Icon Theme...",
-                        zed_actions::icon_theme_selector::Toggle::default(),
-                    ),
-                ])),
-                MenuItem::separator(),
-                #[cfg(target_os = "macos")]
-                MenuItem::os_submenu("Services", gpui::SystemMenuType::Services),
-                MenuItem::separator(),
-                MenuItem::action("Extensions", zed_actions::Extensions::default()),
-                #[cfg(not(target_os = "windows"))]
-                MenuItem::action("Install CLI", install_cli::InstallCliBinary),
-                MenuItem::separator(),
-                #[cfg(target_os = "macos")]
-                MenuItem::action("Hide Zed", super::Hide),
-                #[cfg(target_os = "macos")]
-                MenuItem::action("Hide Others", super::HideOthers),
-                #[cfg(target_os = "macos")]
-                MenuItem::action("Show All", super::ShowAll),
-                MenuItem::separator(),
-                MenuItem::action("Quit Zed", Quit),
-            ],
+            items: zed_items,
         },
         Menu {
             name: "File".into(),
             disabled: false,
-            items: vec![
-                MenuItem::action("New", workspace::NewFile),
-                MenuItem::action("New Window", workspace::NewWindow),
-                MenuItem::separator(),
-                #[cfg(not(target_os = "macos"))]
-                MenuItem::action("Open File...", workspace::OpenFiles),
-                MenuItem::action(
-                    if cfg!(not(target_os = "macos")) {
-                        "Open Folder..."
-                    } else {
-                        "Open…"
-                    },
-                    workspace::Open::default(),
-                ),
-                MenuItem::action(
-                    "Open Recent...",
-                    zed_actions::OpenRecent {
-                        create_new_window: false,
-                    },
-                ),
-                MenuItem::action(
-                    "Open Remote...",
-                    zed_actions::OpenRemote {
-                        create_new_window: false,
-                        from_existing_connection: false,
-                    },
-                ),
-                MenuItem::separator(),
-                MenuItem::action("Add Folder to Project…", workspace::AddFolderToProject),
-                MenuItem::separator(),
-                MenuItem::action("Save", workspace::Save { save_intent: None }),
-                MenuItem::action("Save As…", workspace::SaveAs),
-                MenuItem::action("Save All", workspace::SaveAll { save_intent: None }),
-                MenuItem::separator(),
-                MenuItem::action(
-                    "Close Editor",
-                    workspace::CloseActiveItem {
-                        save_intent: None,
-                        close_pinned: true,
-                    },
-                ),
-                MenuItem::action("Close Project", workspace::CloseProject),
-                MenuItem::action("Close Window", workspace::CloseWindow),
-            ],
+            items: file_items,
         },
         Menu {
             name: "Edit".into(),
@@ -268,19 +264,7 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
                         reveal_target: None,
                     },
                 ),
-                MenuItem::action("Start Debugger", debugger_ui::Start),
-                MenuItem::separator(),
                 MenuItem::action("Edit tasks.json...", crate::zed::OpenProjectTasks),
-                MenuItem::action("Edit debug.json...", zed_actions::OpenProjectDebugTasks),
-                MenuItem::separator(),
-                MenuItem::action("Continue", debugger_ui::Continue),
-                MenuItem::action("Step Over", debugger_ui::StepOver),
-                MenuItem::action("Step Into", debugger_ui::StepInto),
-                MenuItem::action("Step Out", debugger_ui::StepOut),
-                MenuItem::separator(),
-                MenuItem::action("Toggle Breakpoint", editor::actions::ToggleBreakpoint),
-                MenuItem::action("Edit Breakpoint", editor::actions::EditLogBreakpoint),
-                MenuItem::action("Clear All Breakpoints", debugger_ui::ClearAllBreakpoints),
             ],
         },
         Menu {
@@ -297,34 +281,15 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
             disabled: false,
             items: vec![
                 MenuItem::action(
-                    "View Release Notes Locally",
-                    auto_update_ui::ViewReleaseNotesLocally,
-                ),
-                MenuItem::action("View Telemetry", zed_actions::OpenTelemetryLog),
-                MenuItem::action("View Dependency Licenses", zed_actions::OpenLicenses),
-                MenuItem::action("Show Welcome", onboarding::ShowWelcome),
-                MenuItem::separator(),
-                MenuItem::action("File Bug Report...", zed_actions::feedback::FileBugReport),
-                MenuItem::action("Request Feature...", zed_actions::feedback::RequestFeature),
-                MenuItem::action("Email Us...", zed_actions::feedback::EmailZed),
-                MenuItem::separator(),
-                MenuItem::action(
                     "Documentation",
                     super::OpenBrowser {
                         url: "https://zed.dev/docs".into(),
                     },
                 ),
-                MenuItem::action("Zed Repository", feedback::OpenZedRepo),
                 MenuItem::action(
-                    "Zed Twitter",
+                    "Zed Repository",
                     super::OpenBrowser {
-                        url: "https://twitter.com/zeddotdev".into(),
-                    },
-                ),
-                MenuItem::action(
-                    "Join the Team",
-                    super::OpenBrowser {
-                        url: "https://zed.dev/jobs".into(),
+                        url: "https://github.com/zed-industries/zed".into(),
                     },
                 ),
             ],

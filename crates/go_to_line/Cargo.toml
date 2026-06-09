@@ -12,6 +12,10 @@ workspace = true
 path = "src/go_to_line.rs"
 doctest = false
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 editor.workspace = true
 gpui.workspace = true

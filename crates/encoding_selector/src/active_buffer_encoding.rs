@@ -6,7 +6,6 @@ use gpui::{
     App, Context, Entity, IntoElement, ParentElement, Render, Styled, Subscription, WeakEntity,
     Window, div,
 };
-use project::Project;
 use ui::{Button, ButtonCommon, Clickable, LabelSize, Tooltip};
 use workspace::{
     EncodingDisplayOptions, HideStatusItem, StatusBarSettings, StatusItemView, Workspace,
@@ -16,12 +15,9 @@ use workspace::{
 pub struct ActiveBufferEncoding {
     active_encoding: Option<&'static Encoding>,
     workspace: WeakEntity<Workspace>,
-    project: Entity<Project>,
     _observe_active_editor: Option<Subscription>,
     has_bom: bool,
     is_dirty: bool,
-    is_shared: bool,
-    is_via_remote_server: bool,
 }
 
 impl ActiveBufferEncoding {
@@ -29,12 +25,9 @@ impl ActiveBufferEncoding {
         Self {
             active_encoding: None,
             workspace: workspace.weak_handle(),
-            project: workspace.project().clone(),
             _observe_active_editor: None,
             has_bom: false,
             is_dirty: false,
-            is_shared: false,
-            is_via_remote_server: false,
         }
     }
 
@@ -42,10 +35,6 @@ impl ActiveBufferEncoding {
         self.active_encoding = None;
         self.has_bom = false;
         self.is_dirty = false;
-
-        let project = self.project.read(cx);
-        self.is_shared = project.is_shared();
-        self.is_via_remote_server = project.is_via_remote_server();
 
         if let Some(buffer) = editor.read(cx).active_buffer(cx) {
             let buffer = buffer.read(cx);
@@ -77,10 +66,6 @@ impl Render for ActiveBufferEncoding {
 
         let (disabled, tooltip_text) = if self.is_dirty {
             (true, "Save file to change encoding")
-        } else if self.is_shared {
-            (true, "Cannot change encoding during collaboration")
-        } else if self.is_via_remote_server {
-            (true, "Cannot change encoding of remote server file")
         } else {
             (false, "Reopen with Encoding")
         };
@@ -124,8 +109,6 @@ impl StatusItemView for ActiveBufferEncoding {
             self.active_encoding = None;
             self.has_bom = false;
             self.is_dirty = false;
-            self.is_shared = false;
-            self.is_via_remote_server = false;
             self._observe_active_editor = None;
         }
 

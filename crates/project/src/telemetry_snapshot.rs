@@ -79,15 +79,7 @@ impl TelemetryWorktreeSnapshot {
                             repo.branch.as_ref().map(|branch| branch.name().to_owned());
                         repo.send_job("telemetry_snapshot", None, |state, _| async move {
                             let RepositoryState::Local(LocalRepositoryState { backend, .. }) =
-                                state
-                            else {
-                                return GitState {
-                                    remote_url: None,
-                                    head_sha: None,
-                                    current_branch,
-                                    diff: None,
-                                };
-                            };
+                                state;
 
                             let remote_url = backend.remote_url("origin").await;
                             let head_sha = backend.head_sha().await;

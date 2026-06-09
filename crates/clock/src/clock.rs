@@ -22,8 +22,8 @@ impl ReplicaId {
     pub const AGENT: ReplicaId = ReplicaId(2);
     /// A local branch.
     pub const LOCAL_BRANCH: ReplicaId = ReplicaId(3);
-    /// The first collaborative replica ID, any replica equal or greater than this is a collaborative replica.
-    pub const FIRST_COLLAB_ID: ReplicaId = ReplicaId(8);
+    /// The first external replica ID.
+    pub const FIRST_EXTERNAL_ID: ReplicaId = ReplicaId(8);
 
     pub fn new(id: u16) -> Self {
         ReplicaId(id)
@@ -34,7 +34,7 @@ impl ReplicaId {
     }
 
     pub fn is_remote(self) -> bool {
-        self == ReplicaId::REMOTE_SERVER || self >= ReplicaId::FIRST_COLLAB_ID
+        self == ReplicaId::REMOTE_SERVER || self >= ReplicaId::FIRST_EXTERNAL_ID
     }
 }
 
@@ -69,7 +69,7 @@ pub struct Lamport {
 #[derive(Default, Hash, Eq, PartialEq)]
 pub struct Global {
     // 4 is chosen as it is the biggest count that does not increase the size of the field itself.
-    // Coincidentally, it also covers all the important non-collab replica ids.
+    // Coincidentally, it also covers all the local replica ids.
     values: SmallVec<[u32; 4]>,
 }
 

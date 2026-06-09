@@ -19,7 +19,7 @@ use std::io::Write;
 use std::sync::LazyLock;
 use std::time::Instant;
 use std::{env, mem, path::PathBuf, sync::Arc, time::Duration};
-use telemetry_events::{AssistantEventData, AssistantPhase, Event, EventRequestBody, EventWrapper};
+use telemetry_events::{Event, EventRequestBody, EventWrapper};
 
 pub struct TelemetrySubscription {
     pub historical_events: Result<HistoricalEvents>,
@@ -397,27 +397,6 @@ impl Telemetry {
         drop(state);
     }
 
-    pub fn report_assistant_event(self: &Arc<Self>, event: AssistantEventData) {
-        let event_type = match event.phase {
-            AssistantPhase::Response => "Assistant Responded",
-            AssistantPhase::Invoked => "Assistant Invoked",
-            AssistantPhase::Accepted => "Assistant Response Accepted",
-            AssistantPhase::Rejected => "Assistant Response Rejected",
-        };
-
-        telemetry::event!(
-            event_type,
-            conversation_id = event.conversation_id,
-            kind = event.kind,
-            phase = event.phase,
-            message_id = event.message_id,
-            model = event.model,
-            model_provider = event.model_provider,
-            response_latency = event.response_latency,
-            error_message = event.error_message,
-            language_name = event.language_name,
-        );
-    }
 
     pub fn log_edit_event(self: &Arc<Self>, environment: &'static str, is_via_ssh: bool) {
         static LAST_EVENT_TIME: Mutex<Option<Instant>> = Mutex::new(None);

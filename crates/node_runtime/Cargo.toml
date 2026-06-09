@@ -13,6 +13,7 @@ path = "src/node_runtime.rs"
 doctest = false
 
 [features]
+lite = []
 test-support = []
 
 [dependencies]

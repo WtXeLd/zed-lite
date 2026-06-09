@@ -24,4 +24,5 @@ util.workspace = true
 
 
 [features]
+lite = []
 test-support = []

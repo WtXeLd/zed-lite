@@ -1,7 +1,4 @@
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{path::Path, sync::Arc};
 
 use anyhow::Context;
 use collections::{BTreeMap, HashMap};
@@ -14,7 +11,7 @@ use util::serde::default_true;
 
 use crate::{
     AllLanguageSettingsContent, DelayMs, ExtendingVec, ParseStatus, ProjectTerminalSettingsContent,
-    RootUserSettings, SaturatingBool, fallible_options,
+    RootUserSettings, fallible_options,
 };
 
 #[with_fallible_options]
@@ -61,30 +58,12 @@ pub struct ProjectSettingsContent {
 
     pub terminal: Option<ProjectTerminalSettingsContent>,
 
-    /// Configuration for Debugger-related features
-    #[serde(default)]
-    pub dap: HashMap<Arc<str>, DapSettingsContent>,
-
-    /// Settings for context servers used for AI-related features.
-    #[serde(default)]
-    pub context_servers: HashMap<Arc<str>, ContextServerSettingsContent>,
-
-    /// Default timeout in seconds for context server tool calls.
-    /// Can be overridden per-server in context_servers configuration.
-    ///
-    /// Default: 60
-    pub context_server_timeout: Option<u64>,
-
     /// Configuration for how direnv configuration should be loaded
     pub load_direnv: Option<DirenvSettings>,
 
     /// The list of custom Git hosting providers.
     pub git_hosting_providers: Option<ExtendingVec<GitHostingProviderConfig>>,
 
-    /// Whether to disable all AI features in Zed.
-    ///
-    /// Default: false
-    pub disable_ai: Option<SaturatingBool>,
 }
 
 /// When to scan content of linked directories.
@@ -114,12 +93,6 @@ pub enum ScanSymlinksSetting {
 #[with_fallible_options]
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct WorktreeSettingsContent {
-    /// Whether to prevent this project from being shared in public channels.
-    ///
-    /// Default: false
-    #[serde(default)]
-    pub prevent_sharing_in_public_channels: bool,
-
     /// Completely ignore files matching globs from `file_scan_exclusions`. Overrides
     /// `file_scan_inclusions`.
     ///
@@ -361,15 +334,6 @@ pub enum SemanticTokenFontStyle {
 }
 
 #[with_fallible_options]
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, MergeFrom)]
-#[serde(rename_all = "snake_case")]
-pub struct DapSettingsContent {
-    pub binary: Option<String>,
-    pub args: Option<Vec<String>>,
-    pub env: Option<HashMap<String, String>>,
-}
-
-#[with_fallible_options]
 #[derive(
     Default, Copy, Clone, PartialEq, Eq, Debug, Serialize, Deserialize, JsonSchema, MergeFrom,
 )]
@@ -382,134 +346,11 @@ pub struct SessionSettingsContent {
     /// Default: true
     pub restore_unsaved_buffers: Option<bool>,
     /// Whether or not to skip worktree trust checks.
-    /// When trusted, project settings are synchronized automatically,
-    /// language and MCP servers are downloaded and started automatically.
+    /// When trusted, project settings are synchronized automatically
+    /// and language servers are started automatically.
     ///
     /// Default: false
     pub trust_all_worktrees: Option<bool>,
-}
-
-#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, JsonSchema, MergeFrom, Debug)]
-#[serde(untagged, rename_all = "snake_case")]
-pub enum ContextServerSettingsContent {
-    Stdio {
-        /// Whether the context server is enabled.
-        #[serde(default = "default_true")]
-        enabled: bool,
-        /// Whether to run the context server on the remote server when using remote development.
-        ///
-        /// If this is false, the context server will always run on the local machine.
-        ///
-        /// Default: false
-        #[serde(default)]
-        remote: bool,
-        #[serde(flatten)]
-        command: ContextServerCommand,
-    },
-    Http {
-        /// Whether the context server is enabled.
-        #[serde(default = "default_true")]
-        enabled: bool,
-        /// The URL of the remote context server.
-        url: String,
-        /// Optional headers to send.
-        #[serde(skip_serializing_if = "HashMap::is_empty", default)]
-        headers: HashMap<String, String>,
-        /// Timeout for tool calls in seconds. Defaults to global context_server_timeout if not specified.
-        timeout: Option<u64>,
-        /// Pre-registered OAuth client credentials for authorization servers that
-        /// require out-of-band client registration.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        oauth: Option<OAuthClientSettings>,
-    },
-    Extension {
-        /// Whether the context server is enabled.
-        #[serde(default = "default_true")]
-        enabled: bool,
-        /// Whether to run the context server on the remote server when using remote development.
-        ///
-        /// If this is false, the context server will always run on the local machine.
-        ///
-        /// Default: false
-        #[serde(default)]
-        remote: bool,
-        /// The settings for this context server specified by the extension.
-        ///
-        /// Consult the documentation for the context server to see what settings
-        /// are supported.
-        settings: serde_json::Value,
-    },
-}
-
-impl ContextServerSettingsContent {
-    pub fn set_enabled(&mut self, enabled: bool) {
-        match self {
-            ContextServerSettingsContent::Stdio {
-                enabled: custom_enabled,
-                ..
-            } => {
-                *custom_enabled = enabled;
-            }
-            ContextServerSettingsContent::Extension {
-                enabled: ext_enabled,
-                ..
-            } => *ext_enabled = enabled,
-            ContextServerSettingsContent::Http {
-                enabled: remote_enabled,
-                ..
-            } => *remote_enabled = enabled,
-        }
-    }
-}
-
-/// Pre-registered OAuth client credentials for MCP servers that don't support
-/// Dynamic Client Registration.
-#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, JsonSchema, MergeFrom, Debug)]
-pub struct OAuthClientSettings {
-    /// The OAuth client ID obtained from out-of-band registration with the
-    /// authorization server.
-    pub client_id: String,
-    /// The OAuth client secret, if this is a confidential client. For security,
-    /// prefer providing this interactively; we will prompt and store it in
-    /// the system keychain.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub client_secret: Option<String>,
-}
-
-#[with_fallible_options]
-#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, JsonSchema, MergeFrom)]
-pub struct ContextServerCommand {
-    #[serde(rename = "command")]
-    pub path: PathBuf,
-    pub args: Vec<String>,
-    pub env: Option<HashMap<String, String>>,
-    /// Timeout for tool calls in seconds. Defaults to 60 if not specified.
-    pub timeout: Option<u64>,
-}
-
-impl std::fmt::Debug for ContextServerCommand {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let filtered_env = self.env.as_ref().map(|env| {
-            env.iter()
-                .map(|(k, v)| {
-                    (
-                        k,
-                        if util::redact::should_redact(k) {
-                            "[REDACTED]"
-                        } else {
-                            v
-                        },
-                    )
-                })
-                .collect::<Vec<_>>()
-        });
-
-        f.debug_struct("ContextServerCommand")
-            .field("path", &self.path)
-            .field("args", &self.args)
-            .field("env", &filtered_env)
-            .finish()
-    }
 }
 
 #[with_fallible_options]

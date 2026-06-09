@@ -11,6 +11,10 @@ workspace = true
 [lib]
 path = "src/input_latency_ui.rs"
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 chrono.workspace = true
 collections.workspace = true

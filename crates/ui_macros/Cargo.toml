@@ -12,6 +12,10 @@ workspace = true
 path = "src/ui_macros.rs"
 proc-macro = true
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 quote.workspace = true
 syn.workspace = true

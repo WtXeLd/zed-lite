@@ -5,9 +5,8 @@ use gpui::{
 use strum::IntoEnumIterator;
 use theme::all_theme_colors;
 use ui::{
-    AudioStatus, Avatar, AvatarAudioStatusIndicator, AvatarAvailabilityIndicator, ButtonLike,
-    Checkbox, CollaboratorAvailability, DecoratedIcon, ElevationIndex, Facepile, IconDecoration,
-    Indicator, KeybindingHint, Switch, TintColor, Tooltip, prelude::*,
+    Avatar, ButtonLike, Checkbox, DecoratedIcon, ElevationIndex, IconDecoration, Indicator,
+    KeybindingHint, Switch, TintColor, Tooltip, prelude::*,
     utils::calculate_contrast_ratio,
 };
 
@@ -113,8 +112,6 @@ impl Item for ThemePreview {
         Task::ready(Some(cx.new(|cx| Self::new(window, cx))))
     }
 }
-
-const AVATAR_URL: &str = "https://avatars.githubusercontent.com/u/1714999?v=4";
 
 impl ThemePreview {
     fn preview_bg(window: &mut Window, cx: &mut App) -> Hsla {

@@ -11,6 +11,10 @@ workspace = true
 [lib]
 path = "src/git_hosting_providers.rs"
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true

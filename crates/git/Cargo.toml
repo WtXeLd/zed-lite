@@ -12,6 +12,7 @@ workspace = true
 path = "src/git.rs"
 
 [features]
+lite = []
 test-support = ["rand"]
 
 [dependencies]

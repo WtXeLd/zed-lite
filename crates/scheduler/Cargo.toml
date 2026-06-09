@@ -13,6 +13,7 @@ path = "src/scheduler.rs"
 doctest = false
 
 [features]
+lite = []
 test-support = []
 
 [dependencies]

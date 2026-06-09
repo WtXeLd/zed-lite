@@ -13,6 +13,10 @@ path = "src/sqlez_macros.rs"
 proc-macro = true
 doctest = false
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 sqlez.workspace = true
 sqlformat.workspace = true

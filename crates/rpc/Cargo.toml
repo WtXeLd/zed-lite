@@ -14,12 +14,12 @@ path = "src/rpc.rs"
 doctest = false
 
 [features]
+lite = []
 gpui = ["dep:gpui"]
 test-support = ["collections/test-support", "gpui/test-support", "proto/test-support"]
 
 [dependencies]
 anyhow.workspace = true
-async-tungstenite.workspace = true
 base64.workspace = true
 collections.workspace = true
 futures.workspace = true

@@ -731,7 +731,7 @@ impl Serialize for Peer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use async_tungstenite::tungstenite::Message as WebSocketMessage;
+    use crate::conn::WireMessage;
     use gpui::TestAppContext;
 
     fn init_logger() {
@@ -1340,7 +1340,7 @@ mod tests {
         let _ = messages_ended_rx.await;
         assert!(
             server_conn
-                .send(WebSocketMessage::Binary(vec![].into()))
+                .send(WireMessage::Binary(Vec::new()))
                 .await
                 .is_err()
         );

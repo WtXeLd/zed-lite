@@ -4,6 +4,10 @@ version = "0.1.0"
 publish.workspace = true
 edition.workspace = true
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 log.workspace = true
 anyhow.workspace = true

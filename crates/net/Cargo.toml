@@ -12,6 +12,10 @@ workspace = true
 path = "src/net.rs"
 doctest = false
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 smol.workspace = true
 

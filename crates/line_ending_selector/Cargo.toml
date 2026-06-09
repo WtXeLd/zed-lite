@@ -12,6 +12,10 @@ workspace = true
 path = "src/line_ending_selector.rs"
 doctest = false
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 editor.workspace = true
 gpui.workspace = true

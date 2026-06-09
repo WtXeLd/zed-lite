@@ -12,6 +12,8 @@ workspace = true
 path = "src/system_specs.rs"
 
 [features]
+lite = []
+test-support = []
 default = []
 
 [dependencies]

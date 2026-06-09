@@ -42,12 +42,7 @@ impl SystemSpecs {
         );
         let memory = system.total_memory();
         let architecture = env::consts::ARCH;
-        let commit_sha = match release_channel {
-            ReleaseChannel::Dev | ReleaseChannel::Nightly => {
-                AppCommitSha::try_global(cx).map(|sha| sha.full())
-            }
-            _ => None,
-        };
+        let commit_sha = AppCommitSha::try_global(cx).map(|sha| sha.full());
         let bundle_type = bundle_type();
 
         let gpu_specs = window.gpu_specs().map(|specs| {
@@ -84,10 +79,7 @@ impl SystemSpecs {
         );
         let memory = system.total_memory();
         let architecture = env::consts::ARCH;
-        let commit_sha = match release_channel {
-            ReleaseChannel::Dev | ReleaseChannel::Nightly => app_commit_sha.map(|sha| sha.full()),
-            _ => None,
-        };
+        let commit_sha = app_commit_sha.map(|sha| sha.full());
         let bundle_type = bundle_type();
 
         Self {

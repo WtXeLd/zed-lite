@@ -11,6 +11,10 @@ workspace = true
 [lib]
 path = "src/svg_preview.rs"
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 multi_buffer.workspace = true
 file_icons.workspace = true

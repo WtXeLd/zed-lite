@@ -191,7 +191,6 @@ impl Editor {
             s.select_ranges(vec![diagnostic.range.start..diagnostic.range.start])
         });
         self.activate_diagnostics(buffer_id, diagnostic, window, cx);
-        self.refresh_edit_prediction(false, true, window, cx);
     }
 
     pub fn go_to_diagnostic_in_direction(

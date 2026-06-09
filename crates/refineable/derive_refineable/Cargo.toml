@@ -15,6 +15,10 @@ path = "src/derive_refineable.rs"
 proc-macro = true
 doctest = false
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 proc-macro2.workspace = true
 quote.workspace = true

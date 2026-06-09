@@ -50,8 +50,6 @@ mod bookmarks;
 #[cfg(test)]
 mod code_completion_tests;
 #[cfg(test)]
-mod edit_prediction_tests;
-#[cfg(test)]
 mod editor_block_comment_tests;
 #[cfg(test)]
 mod editor_tests;
@@ -64,7 +62,6 @@ mod code_actions;
 mod completions;
 mod config;
 mod diagnostics;
-mod edit_prediction;
 mod input;
 mod navigation;
 mod rewrap;
@@ -83,16 +80,6 @@ pub use display_map::{
     ChunkRenderer, ChunkRendererContext, DisplayPoint, FoldPlaceholder, HighlightKey,
     NavigationOverlayKey, SemanticTokenHighlight,
 };
-pub use edit_prediction::make_suggestion_styles;
-pub(crate) use edit_prediction::{
-    EditDisplayMode, EditPrediction, EditPredictionPreview, EditPredictionSettings,
-    EditPredictionState, MenuEditPredictionsPolicy, RegisteredEditPredictionDelegate,
-};
-#[cfg(test)]
-pub(crate) use edit_prediction::{
-    EditPredictionKeybindAction, EditPredictionKeybindSurface, edit_prediction_edit_text,
-};
-pub use edit_prediction_types::Direction;
 pub use editor_settings::{
     CompletionDetailAlignment, CompletionMenuItemKind, CurrentLineHighlight, DiffViewStyle,
     DocumentColorsRenderMode, EditorSettings, EditorSettingsScrollbarProxy, ScrollBeyondLastLine,
@@ -124,13 +111,12 @@ pub use multi_buffer::{
 pub use split::{SplittableEditor, ToggleSplitDiff};
 pub use split_editor_view::SplitEditorView;
 pub use text::Bias;
+pub use workspace::searchable::Direction;
 
 use ::git::status::FileStatus;
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder, BuildError};
 use anyhow::{Context as _, Result, anyhow, bail};
 use blink_manager::BlinkManager;
-use client::{Collaborator, ParticipantIndex, parse_zed_link};
-use clock::ReplicaId;
 use code_context_menus::{
     AvailableCodeAction, CodeActionContents, CodeActionsItem, CodeActionsMenu, CodeContextMenu,
     CompletionsMenu, ContextMenuOrigin,
@@ -138,16 +124,11 @@ use code_context_menus::{
 use code_lens::CodeLensState;
 use collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use convert_case::{Case, Casing};
-use dap::TelemetrySpawnLocation;
 use display_map::*;
 use document_colors::LspColorData;
 use document_links::LspDocumentLinks;
-use edit_prediction_types::{
-    EditPredictionDelegate, EditPredictionDelegateHandle, EditPredictionDiscardReason,
-    EditPredictionGranularity, SuggestionDisplayType,
-};
 use editor_settings::{GoToDefinitionFallback, Minimap as MinimapSettings};
-use element::{LineWithInvisibles, PositionMap, layout_line};
+use element::{LineWithInvisibles, PositionMap};
 use futures::{
     FutureExt,
     future::{self, Shared},
@@ -155,15 +136,15 @@ use futures::{
 use fuzzy::{StringMatch, StringMatchCandidate};
 use git::blame::{GitBlame, GlobalBlameRenderer};
 use gpui::{
-    Action, Animation, AnimationExt, AnyElement, App, AppContext, AsyncWindowContext,
-    AvailableSpace, Background, Bounds, ClickEvent, ClipboardEntry, ClipboardItem, Context,
-    DispatchPhase, Edges, Entity, EntityId, EntityInputHandler, EventEmitter, FocusHandle,
+    Action, AnyElement, App, AppContext, AsyncWindowContext, Background, Bounds, ClickEvent,
+    ClipboardEntry, ClipboardItem, Context, DispatchPhase, Entity, EntityId, EntityInputHandler,
+    EventEmitter, FocusHandle,
     FocusOutEvent, Focusable, FontId, FontStyle, FontWeight, Global, HighlightStyle, Hsla,
     KeyContext, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, PaintQuad, ParentElement,
-    Pixels, PressureStage, Render, ScrollHandle, SharedString, SharedUri, Size, Stateful, Styled,
+    Pixels, PressureStage, Render, ScrollHandle, SharedString, SharedUri, Size, Styled,
     Subscription, Task, TextRun, TextStyle, TextStyleRefinement, UTF16Selection, UnderlineStyle,
     UniformListScrollHandle, WeakEntity, WeakFocusHandle, Window, div, point, prelude::*,
-    pulsating_between, px, relative, size,
+    px, relative, size,
 };
 use hover_links::{HoverLink, HoveredLinkState, find_file};
 use hover_popover::{HoverState, hide_hover};
@@ -173,13 +154,13 @@ use itertools::{Either, Itertools};
 use language::{
     AutoindentMode, BlockCommentConfig, BracketMatch, BracketPair, Buffer, BufferRow,
     BufferSnapshot, Capability, CharClassifier, CharKind, CharScopeContext, CodeLabel, CursorShape,
-    DiagnosticEntryRef, DiffOptions, EditPredictionsMode, EditPreview, HighlightedText, IndentKind,
+    DiagnosticEntryRef, DiffOptions, HighlightedText, IndentKind,
     IndentSize, Language, LanguageAwareStyling, LanguageName, LanguageRegistry, LanguageScope,
     LocalFile, OffsetRangeExt, OutlineItem, Point, Selection, SelectionGoal, TextObject,
     TransactionId, TreeSitterOptions, WordsQuery,
     language_settings::{
         self, AllLanguageSettings, LanguageSettings, LspInsertMode, RewrapBehavior,
-        WordsCompletionMode, all_language_settings,
+        WordsCompletionMode,
     },
     point_from_lsp, point_to_lsp, text_diff_with_options,
 };
@@ -195,21 +176,13 @@ use multi_buffer::{
     ExcerptBoundaryInfo, ExpandExcerptDirection, MultiBufferDiffHunk, MultiBufferPoint,
     MultiBufferRow,
 };
-use parking_lot::Mutex;
 use persistence::EditorDb;
 use project::{
-    BreakpointWithPosition, CodeAction, Completion, CompletionDisplayOptions, CompletionIntent,
-    CompletionResponse, CompletionSource, DisableAiSettings, DocumentHighlight, InlayHint, InlayId,
-    InvalidationStrategy, Location, LocationLink, LspAction, PrepareRenameResponse, Project,
-    ProjectItem, ProjectPath, ProjectTransaction,
+    CodeAction, Completion, CompletionDisplayOptions, CompletionIntent, CompletionResponse,
+    CompletionSource, DocumentHighlight, InvalidationStrategy, Location,
+    LocationLink, LspAction, PrepareRenameResponse, Project, ProjectItem, ProjectPath,
+    ProjectTransaction,
     bookmark_store::BookmarkStore,
-    debugger::{
-        breakpoint_store::{
-            Breakpoint, BreakpointEditAction, BreakpointSessionState, BreakpointState,
-            BreakpointStore, BreakpointStoreEvent,
-        },
-        session::{Session, SessionEvent},
-    },
     git_store::GitStoreEvent,
     lsp_store::{
         BufferSemanticTokens, CacheInlayHints, CompletionDocumentation, FormatTrigger,
@@ -219,7 +192,6 @@ use project::{
 };
 use rand::seq::SliceRandom;
 use regex::Regex;
-use rpc::{ErrorCode, ErrorExt, proto::PeerId};
 use scroll::{Autoscroll, OngoingScroll, ScrollAnchor, ScrollManager, SharedScrollAnchor};
 use selections_collection::{MutableSelectionsCollection, SelectionsCollection};
 use serde::{Deserialize, Serialize};
@@ -238,7 +210,7 @@ use std::{
     iter::{self, Peekable},
     mem,
     num::NonZeroU32,
-    ops::{ControlFlow, Deref, DerefMut, Not, Range, RangeInclusive},
+    ops::{Deref, DerefMut, Not, Range, RangeInclusive},
     path::{Path, PathBuf},
     rc::Rc,
     sync::Arc,
@@ -251,16 +223,15 @@ use theme::{
 };
 use theme_settings::{ThemeSettings, observe_buffer_font_size_adjustment};
 use ui::{
-    Avatar, ButtonSize, ButtonStyle, ContextMenu, Disclosure, IconButton, IconButtonShape,
-    IconName, IconSize, Indicator, Key, Tooltip, h_flex, prelude::*, scrollbars::ScrollbarAutoHide,
-    utils::WithRemSize,
+    Avatar, ButtonStyle, ContextMenu, Disclosure, IconButton, IconButtonShape, IconName, IconSize,
+    Tooltip, h_flex, prelude::*, scrollbars::ScrollbarAutoHide,
 };
 use ui_input::ErasedEditor;
 use util::{RangeExt, ResultExt, TryFutureExt, maybe, post_inc};
 use workspace::{
-    CollaboratorId, Item as WorkspaceItem, ItemId, ItemNavHistory, NavigationEntry, OpenInTerminal,
-    OpenTerminal, Pane, RestoreOnStartupBehavior, SERIALIZATION_THROTTLE_TIME, SplitDirection,
-    TabBarSettings, Toast, ViewId, Workspace, WorkspaceId, WorkspaceSettings,
+    Item as WorkspaceItem, ItemId, ItemNavHistory, NavigationEntry, OpenInTerminal, OpenTerminal,
+    Pane, RestoreOnStartupBehavior, SERIALIZATION_THROTTLE_TIME, SplitDirection, TabBarSettings,
+    Toast, Workspace, WorkspaceId, WorkspaceSettings,
     item::{ItemBufferKind, ItemHandle, PreviewTabsSettings, SaveOptions},
     notifications::{DetachAndPromptErr, NotificationId, NotifyResultExt, NotifyTaskExt},
     searchable::SearchEvent,
@@ -277,7 +248,7 @@ use crate::{
         inlay_hints::{LspInlayHintData, inlay_hint_settings},
     },
     runnables::{ResolvedTasks, RunnableData, RunnableTasks},
-    scroll::{ScrollOffset, ScrollPixelOffset},
+    scroll::ScrollOffset,
     selections_collection::resolve_selections_wrapping_blocks,
     semantic_tokens::SemanticTokenState,
     signature_help::{SignatureHelpHiddenBy, SignatureHelpState},
@@ -290,7 +261,6 @@ const CURSOR_BLINK_INTERVAL: Duration = Duration::from_millis(500);
 const MAX_LINE_LEN: usize = 1024;
 const MIN_NAVIGATION_HISTORY_ROW_DELTA: i64 = 10;
 const MAX_SELECTION_HISTORY_LEN: usize = 1024;
-pub(crate) const CURSORS_VISIBLE_FOR: Duration = Duration::from_millis(2000);
 #[doc(hidden)]
 pub const CODE_ACTIONS_DEBOUNCE_TIMEOUT: Duration = Duration::from_millis(250);
 pub const SELECTION_HIGHLIGHT_DEBOUNCE_TIMEOUT: Duration = Duration::from_millis(100);
@@ -300,7 +270,6 @@ pub(crate) const FORMAT_TIMEOUT: Duration = Duration::from_secs(5);
 pub(crate) const SCROLL_CENTER_TOP_BOTTOM_DEBOUNCE_TIMEOUT: Duration = Duration::from_secs(1);
 pub const LSP_REQUEST_DEBOUNCE_TIMEOUT: Duration = Duration::from_millis(50);
 
-pub(crate) const EDIT_PREDICTION_KEY_CONTEXT: &str = "edit_prediction";
 pub(crate) const MINIMAP_FONT_SIZE: AbsoluteLength = AbsoluteLength::Pixels(px(2.));
 
 enum ReportEditorEvent {
@@ -348,7 +317,6 @@ pub fn init(cx: &mut App) {
     cx.set_global(breadcrumbs::RenderBreadcrumbText(render_breadcrumb_text));
 
     workspace::register_project_item::<Editor>(cx);
-    workspace::FollowableViewRegistry::register::<Editor>(cx);
     workspace::register_serializable_item::<Editor>(cx);
 
     cx.observe_new(
@@ -524,7 +492,6 @@ pub struct EditorStyle {
     pub syntax: Arc<SyntaxTheme>,
     pub status: StatusColors,
     pub inlay_hints_style: HighlightStyle,
-    pub edit_prediction_styles: EditPredictionStyles,
     pub unnecessary_code_fade: f32,
     pub show_underlines: bool,
 }
@@ -543,10 +510,6 @@ impl Default for EditorStyle {
             // style and retrieve them directly from the theme.
             status: StatusColors::dark(),
             inlay_hints_style: HighlightStyle::default(),
-            edit_prediction_styles: EditPredictionStyles {
-                insertion: HighlightStyle::default(),
-                whitespace: HighlightStyle::default(),
-            },
             unnecessary_code_fade: Default::default(),
             show_underlines: true,
         }
@@ -959,10 +922,7 @@ pub struct Editor {
     project: Option<Entity<Project>>,
     semantics_provider: Option<Rc<dyn SemanticsProvider>>,
     completion_provider: Option<Rc<dyn CompletionProvider>>,
-    collaboration_hub: Option<Box<dyn CollaborationHub>>,
     blink_manager: Entity<BlinkManager>,
-    show_cursor_names: bool,
-    hovered_cursors: HashMap<HoveredCursor, Task<()>>,
     pub show_local_selections: bool,
     mode: EditorMode,
     breadcrumbs_visibility: BreadcrumbsVisibility,
@@ -985,7 +945,6 @@ pub struct Editor {
     show_code_actions: Option<bool>,
     show_runnables: Option<bool>,
     show_bookmarks: Option<bool>,
-    show_breakpoints: Option<bool>,
     show_diff_review_button: bool,
     show_wrap_guides: Option<bool>,
     show_indent_guides: Option<bool>,
@@ -1034,26 +993,14 @@ pub struct Editor {
     expects_character_input: bool,
     use_modal_editing: bool,
     read_only: bool,
-    leader_id: Option<CollaboratorId>,
-    remote_id: Option<ViewId>,
     pub hover_state: HoverState,
     pending_mouse_down: Option<Rc<RefCell<Option<MouseDownEvent>>>>,
     prev_pressure_stage: Option<PressureStage>,
     gutter_hovered: bool,
     hovered_link_state: Option<HoveredLinkState>,
-    edit_prediction_provider: Option<RegisteredEditPredictionDelegate>,
     code_action_providers: Vec<Rc<dyn CodeActionProvider>>,
-    active_edit_prediction: Option<EditPredictionState>,
-    /// Used to prevent flickering as the user types while the menu is open
-    stale_edit_prediction_in_menu: Option<EditPredictionState>,
-    edit_prediction_settings: EditPredictionSettings,
-    edit_predictions_hidden_for_vim_mode: bool,
-    show_edit_predictions_override: Option<bool>,
     show_completions_on_input_override: Option<bool>,
-    menu_edit_predictions_policy: MenuEditPredictionsPolicy,
-    edit_prediction_preview: EditPredictionPreview,
     in_leading_whitespace: bool,
-    next_inlay_id: usize,
     next_color_inlay_id: usize,
     _subscriptions: Vec<Subscription>,
     pixel_position_of_newest_cursor: Option<gpui::Point<Pixels>>,
@@ -1094,7 +1041,6 @@ pub struct Editor {
     expect_bounds_change: Option<Bounds<Pixels>>,
     runnables: RunnableData,
     bookmark_store: Option<Entity<BookmarkStore>>,
-    breakpoint_store: Option<Entity<BreakpointStore>>,
     gutter_hover_button: (Option<GutterHoverButton>, Option<Task<()>>),
     pub(crate) gutter_diff_review_indicator: (Option<PhantomDiffReviewIndicator>, Option<Task<()>>),
     pub(crate) diff_review_drag_state: Option<DiffReviewDragState>,
@@ -1201,7 +1147,6 @@ pub struct EditorSnapshot {
     show_git_diff_gutter: Option<bool>,
     show_code_actions: Option<bool>,
     show_runnables: Option<bool>,
-    show_breakpoints: Option<bool>,
     show_bookmarks: Option<bool>,
     git_blame_gutter_max_author_length: Option<usize>,
     pub display_snapshot: DisplaySnapshot,
@@ -1261,17 +1206,6 @@ struct CharacterDimensions {
     line_height: Pixels,
 }
 
-#[derive(Debug)]
-pub struct RemoteSelection {
-    pub replica_id: ReplicaId,
-    pub selection: Selection<Anchor>,
-    pub cursor_shape: CursorShape,
-    pub collaborator_id: CollaboratorId,
-    pub line_mode: bool,
-    pub user_name: Option<SharedString>,
-    pub color: PlayerColor,
-}
-
 #[derive(Clone, Debug)]
 struct SelectionHistoryEntry {
     selections: Arc<[Selection<Anchor>]>,
@@ -1287,12 +1221,6 @@ enum SelectionHistoryMode {
     Undoing,
     Redoing,
     Skipping,
-}
-
-#[derive(Clone, PartialEq, Eq, Hash)]
-struct HoveredCursor {
-    replica_id: ReplicaId,
-    selection_id: usize,
 }
 
 #[derive(Debug)]
@@ -2038,24 +1966,6 @@ impl Editor {
                 ));
             };
 
-            project_subscriptions.push(cx.subscribe_in(
-                &project.read(cx).breakpoint_store(),
-                window,
-                |editor, _, event, window, cx| match event {
-                    BreakpointStoreEvent::ClearDebugLines => {
-                        editor.clear_row_highlights::<ActiveDebugLine>();
-                        editor.refresh_inline_values(cx);
-                    }
-                    BreakpointStoreEvent::SetDebugLine => {
-                        if editor.go_to_active_debug_line(window, cx) {
-                            cx.stop_propagation();
-                        }
-
-                        editor.refresh_inline_values(cx);
-                    }
-                    _ => {}
-                },
-            ));
             let git_store = project.read(cx).git_store().clone();
             let project = project.clone();
             project_subscriptions.push(cx.subscribe(&git_store, move |this, _, event, cx| {
@@ -2101,11 +2011,6 @@ impl Editor {
 
         let bookmark_store = match (&mode, project.as_ref()) {
             (EditorMode::Full { .. }, Some(project)) => Some(project.read(cx).bookmark_store()),
-            _ => None,
-        };
-
-        let breakpoint_store = match (&mode, project.as_ref()) {
-            (EditorMode::Full { .. }, Some(project)) => Some(project.read(cx).breakpoint_store()),
             _ => None,
         };
 
@@ -2156,7 +2061,6 @@ impl Editor {
             semantics_provider: project
                 .as_ref()
                 .map(|project| Rc::new(project.downgrade()) as _),
-            collaboration_hub: project.clone().map(|project| Box::new(project) as _),
             project,
             blink_manager: blink_manager.clone(),
             show_local_selections: true,
@@ -2183,7 +2087,6 @@ impl Editor {
             show_code_actions: None,
             show_runnables: None,
             show_bookmarks: None,
-            show_breakpoints: None,
             show_diff_review_button: false,
             show_wrap_guides: None,
             show_indent_guides,
@@ -2206,7 +2109,6 @@ impl Editor {
             auto_signature_help: None,
             find_all_references_task_sources: Vec::new(),
             next_completion_id: 0,
-            next_inlay_id: 0,
             code_action_providers,
             code_actions_for_selection: CodeActionsForSelection::None,
             runnables_for_selection_toggle: Task::ready(()),
@@ -2235,18 +2137,10 @@ impl Editor {
             use_selection_highlight: true,
             auto_replace_emoji_shortcode: false,
             jsx_tag_auto_close_enabled_in_any_buffer: false,
-            leader_id: None,
-            remote_id: None,
             hover_state: HoverState::default(),
             pending_mouse_down: None,
             prev_pressure_stage: None,
             hovered_link_state: None,
-            edit_prediction_provider: None,
-            active_edit_prediction: None,
-            stale_edit_prediction_in_menu: None,
-            edit_prediction_preview: EditPredictionPreview::Inactive {
-                released_too_fast: false,
-            },
             inline_diagnostics_enabled: full_mode,
             diagnostics_enabled: full_mode,
             word_completions_enabled: full_mode,
@@ -2258,15 +2152,9 @@ impl Editor {
             expect_bounds_change: None,
             gutter_dimensions: GutterDimensions::default(),
             style: None,
-            show_cursor_names: false,
-            hovered_cursors: HashMap::default(),
             next_editor_action_id: EditorActionId::default(),
             editor_actions: Rc::default(),
-            edit_predictions_hidden_for_vim_mode: false,
-            show_edit_predictions_override: None,
             show_completions_on_input_override: None,
-            menu_edit_predictions_policy: MenuEditPredictionsPolicy::ByProvider,
-            edit_prediction_settings: EditPredictionSettings::Disabled,
             in_leading_whitespace: false,
             custom_context_menu: None,
             show_git_blame_gutter: false,
@@ -2287,7 +2175,6 @@ impl Editor {
             blame_subscription: None,
 
             bookmark_store,
-            breakpoint_store,
             gutter_hover_button: (None, None),
             gutter_diff_review_indicator: (None, None),
             diff_review_drag_state: None,
@@ -2377,13 +2264,6 @@ impl Editor {
         editor.applicable_language_settings = editor.fetch_applicable_language_settings(cx);
         editor.accent_data = editor.fetch_accent_data(cx);
 
-        if let Some(breakpoints) = editor.breakpoint_store.as_ref() {
-            editor
-                ._subscriptions
-                .push(cx.observe(breakpoints, |_, _, cx| {
-                    cx.notify();
-                }));
-        }
         editor._subscriptions.extend(project_subscriptions);
 
         editor._subscriptions.push(cx.subscribe_in(
@@ -2440,35 +2320,6 @@ impl Editor {
             },
         ));
 
-        if let Some(dap_store) = editor
-            .project
-            .as_ref()
-            .map(|project| project.read(cx).dap_store())
-        {
-            let weak_editor = cx.weak_entity();
-
-            editor
-                ._subscriptions
-                .push(
-                    cx.observe_new::<project::debugger::session::Session>(move |_, _, cx| {
-                        let session_entity = cx.entity();
-                        weak_editor
-                            .update(cx, |editor, cx| {
-                                editor._subscriptions.push(
-                                    cx.subscribe(&session_entity, Self::on_debug_session_event),
-                                );
-                            })
-                            .ok();
-                    }),
-                );
-
-            for session in dap_store.read(cx).sessions().cloned().collect::<Vec<_>>() {
-                editor
-                    ._subscriptions
-                    .push(cx.subscribe(&session, Self::on_debug_session_event));
-            }
-        }
-
         // skip adding the initial selection to selection history
         editor.selection_history.mode = SelectionHistoryMode::Skipping;
         editor.end_selection(window, cx);
@@ -2484,8 +2335,6 @@ impl Editor {
             if editor.git_blame_inline_enabled {
                 editor.start_git_blame_inline(false, window, cx);
             }
-
-            editor.go_to_active_debug_line(window, cx);
 
             editor.minimap =
                 editor.create_minimap(EditorSettings::get_global(cx).minimap, window, cx);
@@ -2532,15 +2381,6 @@ impl Editor {
     }
 
     pub fn key_context(&self, window: &mut Window, cx: &mut App) -> KeyContext {
-        self.key_context_internal(self.has_active_edit_prediction(), window, cx)
-    }
-
-    fn key_context_internal(
-        &self,
-        has_active_edit_prediction: bool,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> KeyContext {
         let mut key_context = KeyContext::new_with_defaults();
         key_context.add("Editor");
         let mode = match self.mode {
@@ -2549,10 +2389,6 @@ impl Editor {
             EditorMode::Minimap { .. } => "minimap",
             EditorMode::Full { .. } => "full",
         };
-
-        if EditorSettings::jupyter_enabled(cx) {
-            key_context.add("jupyter");
-        }
 
         key_context.set("mode", mode);
         if self.pending_rename.is_some() {
@@ -2591,7 +2427,7 @@ impl Editor {
             key_context.add("showing_signature_help");
         }
 
-        // Disable vim contexts when a sub-editor (e.g. rename/inline assistant) is focused.
+        // Disable vim contexts when a nested editor is focused.
         if !self.focus_handle(cx).contains_focused(window, cx)
             || (self.is_focused(window) || self.mouse_menu_is_focused(window, cx))
         {
@@ -2615,18 +2451,8 @@ impl Editor {
             key_context.add("multibuffer");
         }
 
-        if has_active_edit_prediction {
-            key_context.add(EDIT_PREDICTION_KEY_CONTEXT);
-            key_context.add("copilot_suggestion");
-        }
-
         if self.in_leading_whitespace {
             key_context.add("in_leading_whitespace");
-        }
-        if self.edit_prediction_requires_modifier() {
-            key_context.set("edit_prediction_mode", "subtle")
-        } else {
-            key_context.set("edit_prediction_mode", "eager");
         }
 
         if self.selection_mark_mode {
@@ -2719,13 +2545,7 @@ impl Editor {
             "Failed to create buffer",
             window,
             cx,
-            |e, _, _| match e.error_code() {
-                ErrorCode::RemoteUpgradeRequired => Some(format!(
-                "The remote instance of Zed does not support this yet. It must be upgraded to {}",
-                e.error_tag("required").unwrap_or("the latest version")
-            )),
-                _ => None,
-            },
+            |_, _, _| None,
         );
     }
 
@@ -2798,19 +2618,7 @@ impl Editor {
             })?;
             anyhow::Ok(())
         })
-        .detach_and_prompt_err("Failed to create buffer", window, cx, |e, _, _| {
-            match e.error_code() {
-                ErrorCode::RemoteUpgradeRequired => Some(format!(
-                "The remote instance of Zed does not support this yet. It must be upgraded to {}",
-                e.error_tag("required").unwrap_or("the latest version")
-            )),
-                _ => None,
-            }
-        });
-    }
-
-    pub fn leader_id(&self) -> Option<CollaboratorId> {
-        self.leader_id
+        .detach_and_prompt_err("Failed to create buffer", window, cx, |_, _, _| None);
     }
 
     pub fn buffer(&self) -> &Entity<MultiBuffer> {
@@ -2882,7 +2690,6 @@ impl Editor {
             show_code_actions: self.show_code_actions,
             show_runnables: self.show_runnables,
             show_bookmarks: self.show_bookmarks,
-            show_breakpoints: self.show_breakpoints,
             git_blame_gutter_max_author_length,
             scroll_anchor: self.scroll_manager.shared_scroll_anchor(cx),
             display_snapshot,
@@ -2921,14 +2728,6 @@ impl Editor {
 
     pub fn set_mode(&mut self, mode: EditorMode) {
         self.mode = mode;
-    }
-
-    pub fn collaboration_hub(&self) -> Option<&dyn CollaborationHub> {
-        self.collaboration_hub.as_deref()
-    }
-
-    pub fn set_collaboration_hub(&mut self, hub: Box<dyn CollaborationHub>) {
-        self.collaboration_hub = Some(hub);
     }
 
     pub fn set_in_project_search(&mut self, in_project_search: bool) {
@@ -3167,7 +2966,7 @@ impl Editor {
 
     pub fn dismiss_menus_and_popups(
         &mut self,
-        is_user_requested: bool,
+        _is_user_requested: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
@@ -3179,8 +2978,6 @@ impl Editor {
         dismissed |= self.hide_signature_help(cx, SignatureHelpHiddenBy::Escape);
         dismissed |= self.hide_context_menu(window, cx).is_some();
         dismissed |= self.mouse_context_menu.take().is_some();
-        dismissed |= is_user_requested
-            && self.discard_edit_prediction(EditPredictionDiscardReason::Rejected, cx);
         dismissed |= self.snippet_stack.pop().is_some();
         if self.diff_review_drag_state.is_some() {
             self.cancel_diff_review_drag(cx);
@@ -3692,29 +3489,6 @@ impl Editor {
                 .to_point(display_snapshot)
     }
 
-    pub fn display_cursor_names(
-        &mut self,
-        _: &DisplayCursorNames,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.show_cursor_names(window, cx);
-    }
-
-    fn show_cursor_names(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.show_cursor_names = true;
-        cx.notify();
-        cx.spawn_in(window, async move |this, cx| {
-            cx.background_executor().timer(CURSORS_VISIBLE_FOR).await;
-            this.update(cx, |this, cx| {
-                this.show_cursor_names = false;
-                cx.notify()
-            })
-            .ok()
-        })
-        .detach();
-    }
-
     fn handle_modifiers_changed(
         &mut self,
         modifiers: Modifiers,
@@ -3722,20 +3496,6 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.update_edit_prediction_settings(cx);
-
-        // Ensure that the edit prediction preview is updated, even when not
-        // enabled, if there's an active edit prediction preview.
-        if self.show_edit_predictions_in_menu()
-            || self.edit_prediction_requires_modifier()
-            || matches!(
-                self.edit_prediction_preview,
-                EditPredictionPreview::Active { .. }
-            )
-        {
-            self.update_edit_prediction_preview(&modifiers, window, cx);
-        }
-
         self.update_selection_mode(&modifiers, position_map, window, cx);
 
         let mouse_position = window.mouse_position();
@@ -3949,65 +3709,6 @@ impl Editor {
             })
     }
 
-    /// Get all display points of breakpoints that will be rendered within editor
-    ///
-    /// This function is used to handle overlaps between breakpoints and Code action/runner symbol.
-    /// It's also used to set the color of line numbers with breakpoints to the breakpoint color.
-    /// TODO debugger: Use this function to color toggle symbols that house nested breakpoints
-    fn active_breakpoints(
-        &self,
-        range: Range<DisplayRow>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> HashMap<DisplayRow, (Anchor, Breakpoint, Option<BreakpointSessionState>)> {
-        let mut breakpoint_display_points = HashMap::default();
-
-        let Some(breakpoint_store) = self.breakpoint_store.clone() else {
-            return breakpoint_display_points;
-        };
-
-        let snapshot = self.snapshot(window, cx);
-
-        let multi_buffer_snapshot = snapshot.buffer_snapshot();
-
-        let range = snapshot.display_point_to_point(DisplayPoint::new(range.start, 0), Bias::Left)
-            ..snapshot.display_point_to_point(DisplayPoint::new(range.end, 0), Bias::Right);
-
-        for (buffer_snapshot, range, _) in
-            multi_buffer_snapshot.range_to_buffer_ranges(range.start..range.end)
-        {
-            let Some(buffer) = self.buffer().read(cx).buffer(buffer_snapshot.remote_id()) else {
-                continue;
-            };
-            let breakpoints = breakpoint_store.read(cx).breakpoints(
-                &buffer,
-                Some(
-                    buffer_snapshot.anchor_before(range.start)
-                        ..buffer_snapshot.anchor_after(range.end),
-                ),
-                &buffer_snapshot,
-                cx,
-            );
-            for (breakpoint, state) in breakpoints {
-                let Some(multi_buffer_anchor) =
-                    multi_buffer_snapshot.anchor_in_excerpt(breakpoint.position)
-                else {
-                    continue;
-                };
-                let position = multi_buffer_anchor
-                    .to_point(&multi_buffer_snapshot)
-                    .to_display_point(&snapshot);
-
-                breakpoint_display_points.insert(
-                    position.row(),
-                    (multi_buffer_anchor, breakpoint.bp.clone(), state),
-                );
-            }
-        }
-
-        breakpoint_display_points
-    }
-
     fn gutter_context_menu(
         &self,
         anchor: Anchor,
@@ -4024,40 +3725,6 @@ impl Editor {
             .summary_for_anchor::<Point>(&anchor)
             .row;
 
-        let breakpoint = self
-            .breakpoint_at_row(row, window, cx)
-            .map(|(anchor, bp)| (anchor, Arc::from(bp)));
-
-        let log_breakpoint_msg = if breakpoint.as_ref().is_some_and(|bp| bp.1.message.is_some()) {
-            "Edit Log Breakpoint"
-        } else {
-            "Set Log Breakpoint"
-        };
-
-        let condition_breakpoint_msg = if breakpoint
-            .as_ref()
-            .is_some_and(|bp| bp.1.condition.is_some())
-        {
-            "Edit Condition Breakpoint"
-        } else {
-            "Set Condition Breakpoint"
-        };
-
-        let hit_condition_breakpoint_msg = if breakpoint
-            .as_ref()
-            .is_some_and(|bp| bp.1.hit_condition.is_some())
-        {
-            "Edit Hit Condition Breakpoint"
-        } else {
-            "Set Hit Condition Breakpoint"
-        };
-
-        let set_breakpoint_msg = if breakpoint.as_ref().is_some() {
-            "Unset Breakpoint"
-        } else {
-            "Set Breakpoint"
-        };
-
         let bookmark = self.bookmark_at_row(row, window, cx);
 
         let set_bookmark_msg = if bookmark.as_ref().is_some() {
@@ -4066,123 +3733,9 @@ impl Editor {
             "Add Bookmark"
         };
 
-        let run_to_cursor = window.is_action_available(&RunToCursor, cx);
-
-        let toggle_state_msg = breakpoint.as_ref().map_or(None, |bp| match bp.1.state {
-            BreakpointState::Enabled => Some("Disable"),
-            BreakpointState::Disabled => Some("Enable"),
-        });
-
-        let (anchor, breakpoint) =
-            breakpoint.unwrap_or_else(|| (anchor, Arc::new(Breakpoint::new_standard())));
-
         ui::ContextMenu::build(window, cx, |menu, _, _cx| {
             menu.on_blur_subscription(Subscription::new(|| {}))
                 .context(focus_handle)
-                .when(run_to_cursor, |this| {
-                    let weak_editor = weak_editor.clone();
-                    this.entry("Run to Cursor", None, move |window, cx| {
-                        weak_editor
-                            .update(cx, |editor, cx| {
-                                editor.change_selections(
-                                    SelectionEffects::no_scroll(),
-                                    window,
-                                    cx,
-                                    |s| s.select_ranges([Point::new(row, 0)..Point::new(row, 0)]),
-                                );
-                            })
-                            .ok();
-
-                        window.dispatch_action(Box::new(RunToCursor), cx);
-                    })
-                    .separator()
-                })
-                .when_some(toggle_state_msg, |this, msg| {
-                    this.entry(msg, None, {
-                        let weak_editor = weak_editor.clone();
-                        let breakpoint = breakpoint.clone();
-                        move |_window, cx| {
-                            weak_editor
-                                .update(cx, |this, cx| {
-                                    this.edit_breakpoint_at_anchor(
-                                        anchor,
-                                        breakpoint.as_ref().clone(),
-                                        BreakpointEditAction::InvertState,
-                                        cx,
-                                    );
-                                })
-                                .log_err();
-                        }
-                    })
-                })
-                .entry(set_breakpoint_msg, None, {
-                    let weak_editor = weak_editor.clone();
-                    let breakpoint = breakpoint.clone();
-                    move |_window, cx| {
-                        weak_editor
-                            .update(cx, |this, cx| {
-                                this.edit_breakpoint_at_anchor(
-                                    anchor,
-                                    breakpoint.as_ref().clone(),
-                                    BreakpointEditAction::Toggle,
-                                    cx,
-                                );
-                            })
-                            .log_err();
-                    }
-                })
-                .entry(log_breakpoint_msg, None, {
-                    let breakpoint = breakpoint.clone();
-                    let weak_editor = weak_editor.clone();
-                    move |window, cx| {
-                        weak_editor
-                            .update(cx, |this, cx| {
-                                this.add_edit_breakpoint_block(
-                                    anchor,
-                                    breakpoint.as_ref(),
-                                    BreakpointPromptEditAction::Log,
-                                    window,
-                                    cx,
-                                );
-                            })
-                            .log_err();
-                    }
-                })
-                .entry(condition_breakpoint_msg, None, {
-                    let breakpoint = breakpoint.clone();
-                    let weak_editor = weak_editor.clone();
-                    move |window, cx| {
-                        weak_editor
-                            .update(cx, |this, cx| {
-                                this.add_edit_breakpoint_block(
-                                    anchor,
-                                    breakpoint.as_ref(),
-                                    BreakpointPromptEditAction::Condition,
-                                    window,
-                                    cx,
-                                );
-                            })
-                            .log_err();
-                    }
-                })
-                .entry(hit_condition_breakpoint_msg, None, {
-                    let breakpoint = breakpoint.clone();
-                    let weak_editor = weak_editor.clone();
-                    move |window, cx| {
-                        weak_editor
-                            .update(cx, |this, cx| {
-                                this.add_edit_breakpoint_block(
-                                    anchor,
-                                    breakpoint.as_ref(),
-                                    BreakpointPromptEditAction::HitCondition,
-                                    window,
-                                    cx,
-                                );
-                            })
-                            .log_err();
-                    }
-                })
-                .separator()
                 .entry(set_bookmark_msg, None, move |_window, cx| {
                     weak_editor
                         .update(cx, |this, cx| {
@@ -4193,189 +3746,30 @@ impl Editor {
         })
     }
 
-    fn render_breakpoint(
-        &self,
-        position: Anchor,
-        row: DisplayRow,
-        breakpoint: &Breakpoint,
-        state: Option<BreakpointSessionState>,
-        cx: &mut Context<Self>,
-    ) -> IconButton {
-        let is_rejected = state.is_some_and(|s| !s.verified);
-
-        let (color, icon) = {
-            let icon = match (&breakpoint.message.is_some(), breakpoint.is_disabled()) {
-                (false, false) => ui::IconName::DebugBreakpoint,
-                (true, false) => ui::IconName::DebugLogBreakpoint,
-                (false, true) => ui::IconName::DebugDisabledBreakpoint,
-                (true, true) => ui::IconName::DebugDisabledLogBreakpoint,
-            };
-
-            let color = if is_rejected {
-                Color::Disabled
-            } else {
-                Color::Debugger
-            };
-
-            (color, icon)
-        };
-
-        let breakpoint = Arc::from(breakpoint.clone());
-
-        let alt_as_text = gpui::Keystroke {
-            modifiers: Modifiers::secondary_key(),
-            ..Default::default()
-        };
-        let primary_action_text = "Unset breakpoint";
-        let focus_handle = self.focus_handle.clone();
-        let has_context_menu = self.has_mouse_context_menu();
-
-        let meta = if is_rejected {
-            SharedString::from("No executable code is associated with this line.")
-        } else if !breakpoint.is_disabled() {
-            SharedString::from(format!(
-                "{alt_as_text}-click to disable\nright-click for more options"
-            ))
-        } else {
-            SharedString::from("Right-click for more options")
-        };
-        IconButton::new(("breakpoint_indicator", row.0 as usize), icon)
-            .icon_size(IconSize::XSmall)
-            .size(ui::ButtonSize::None)
-            .when(is_rejected, |this| {
-                this.indicator(Indicator::icon(Icon::new(IconName::Warning)).color(Color::Warning))
-            })
-            .icon_color(color)
-            .style(ButtonStyle::Transparent)
-            .on_click(cx.listener({
-                move |editor, event: &ClickEvent, window, cx| {
-                    let edit_action = if event.modifiers().platform || breakpoint.is_disabled() {
-                        BreakpointEditAction::InvertState
-                    } else {
-                        BreakpointEditAction::Toggle
-                    };
-
-                    window.focus(&editor.focus_handle(cx), cx);
-                    editor.edit_breakpoint_at_anchor(
-                        position,
-                        breakpoint.as_ref().clone(),
-                        edit_action,
-                        cx,
-                    );
-                }
-            }))
-            .on_right_click(cx.listener(move |editor, event: &ClickEvent, window, cx| {
-                editor.set_gutter_context_menu(row, Some(position), event.position(), window, cx);
-            }))
-            .when(!has_context_menu, |button| {
-                button.tooltip(move |_window, cx| {
-                    Tooltip::with_meta_in(
-                        primary_action_text,
-                        Some(&ToggleBreakpoint),
-                        meta.clone(),
-                        &focus_handle,
-                        cx,
-                    )
-                })
-            })
-    }
-
     fn render_gutter_hover_button(
         &self,
         position: Anchor,
         row: DisplayRow,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> IconButton {
-        #[derive(Clone, Copy)]
-        enum Intent {
-            SetBookmark,
-            SetBreakpoint,
-        }
-
-        impl Intent {
-            fn as_str(&self) -> &'static str {
-                match self {
-                    Intent::SetBookmark => "Set bookmark",
-                    Intent::SetBreakpoint => "Set breakpoint",
-                }
-            }
-
-            fn icon(&self) -> ui::IconName {
-                match self {
-                    Intent::SetBookmark => ui::IconName::Bookmark,
-                    Intent::SetBreakpoint => ui::IconName::DebugBreakpoint,
-                }
-            }
-
-            fn color(&self) -> Color {
-                match self {
-                    Intent::SetBookmark => Color::Info,
-                    Intent::SetBreakpoint => Color::Hint,
-                }
-            }
-
-            fn secondary_and_options(&self) -> String {
-                let alt_as_text = gpui::Keystroke {
-                    modifiers: Modifiers::secondary_key(),
-                    ..Default::default()
-                };
-                match self {
-                    Intent::SetBookmark => format!(
-                        "{alt_as_text}-click to add a breakpoint\nright-click for more options"
-                    ),
-                    Intent::SetBreakpoint => format!(
-                        "{alt_as_text}-click to add a bookmark\nright-click for more options"
-                    ),
-                }
-            }
-        }
-
         let gutter_settings = EditorSettings::get_global(cx).gutter;
         let show_bookmarks = self.show_bookmarks.unwrap_or(gutter_settings.bookmarks);
-        let show_breakpoints = self.show_breakpoints.unwrap_or(gutter_settings.breakpoints);
-
-        let [primary, secondary] = match [show_breakpoints, show_bookmarks] {
-            [true, true] => [Intent::SetBreakpoint, Intent::SetBookmark],
-            [true, false] => [Intent::SetBreakpoint; 2],
-            [false, true] => [Intent::SetBookmark; 2],
-            [false, false] => {
-                log::error!("Trying to place gutter_hover without anything enabled!!");
-                [Intent::SetBookmark; 2]
-            }
-        };
-
-        let intent = if window.modifiers().secondary() {
-            secondary
-        } else {
-            primary
-        };
+        if !show_bookmarks {
+            log::error!("Trying to place gutter_hover without bookmarks enabled");
+        }
 
         let focus_handle = self.focus_handle.clone();
         let has_context_menu = self.has_mouse_context_menu();
-        IconButton::new(("add_breakpoint_button", row.0 as usize), intent.icon())
+        IconButton::new(("add_bookmark_button", row.0 as usize), IconName::Bookmark)
             .icon_size(IconSize::XSmall)
             .size(ui::ButtonSize::None)
-            .icon_color(intent.color())
+            .icon_color(Color::Info)
             .style(ButtonStyle::Transparent)
             .on_click(cx.listener({
                 move |editor, _: &ClickEvent, window, cx| {
                     window.focus(&editor.focus_handle(cx), cx);
-                    let intent = if window.modifiers().secondary() {
-                        secondary
-                    } else {
-                        primary
-                    };
-
-                    match intent {
-                        Intent::SetBookmark => editor.toggle_bookmark_at_row(row, cx),
-                        Intent::SetBreakpoint => editor.edit_breakpoint_at_anchor(
-                            position,
-                            Breakpoint::new_standard(),
-                            BreakpointEditAction::Toggle,
-                            cx,
-                        ),
-                    }
+                    editor.toggle_bookmark_at_row(row, cx);
                 }
             }))
             .on_right_click(cx.listener(move |editor, event: &ClickEvent, window, cx| {
@@ -4384,9 +3778,9 @@ impl Editor {
             .when(!has_context_menu, |button| {
                 button.tooltip(move |_window, cx| {
                     Tooltip::with_meta_in(
-                        intent.as_str(),
-                        Some(&ToggleBreakpoint),
-                        intent.secondary_and_options(),
+                        "Set bookmark",
+                        Some(&ToggleBookmark),
+                        "Right-click for more options",
                         &focus_handle,
                         cx,
                     )
@@ -4423,8 +3817,7 @@ impl Editor {
     }
 
     pub fn context_menu_visible(&self) -> bool {
-        !self.edit_prediction_preview_is_active()
-            && self
+        self
                 .context_menu
                 .borrow()
                 .as_ref()
@@ -4489,8 +3882,6 @@ impl Editor {
         cx.notify();
         self.completion_tasks.clear();
         let context_menu = self.context_menu.borrow_mut().take();
-        self.stale_edit_prediction_in_menu.take();
-        self.update_visible_edit_prediction(window, cx);
         if let Some(CodeContextMenu::Completions(_)) = &context_menu
             && let Some(completion_provider) = &self.completion_provider
         {
@@ -4807,7 +4198,6 @@ impl Editor {
             this.change_selections(Default::default(), window, cx, |s| s.select(selections));
             this.insert("", window, cx);
             linked_edits.apply_with_left_expansion(cx);
-            this.refresh_edit_prediction(true, false, window, cx);
             refresh_linked_ranges(this, window, cx);
         });
     }
@@ -4830,7 +4220,6 @@ impl Editor {
             let linked_edits = this.linked_edits_for_selections(Arc::from(""), cx);
             this.insert("", window, cx);
             linked_edits.apply(cx);
-            this.refresh_edit_prediction(true, false, window, cx);
             refresh_linked_ranges(this, window, cx);
         });
     }
@@ -5015,7 +4404,6 @@ impl Editor {
         self.transact(window, cx, |this, window, cx| {
             this.buffer.update(cx, |b, cx| b.edit(edits, None, cx));
             this.change_selections(Default::default(), window, cx, |s| s.select(selections));
-            this.refresh_edit_prediction(true, false, window, cx);
         });
     }
 
@@ -5632,7 +5020,6 @@ impl Editor {
             window.dispatch_action(
                 OpenTerminal {
                     working_directory,
-                    local: false,
                 }
                 .boxed_clone(),
                 cx,
@@ -5664,111 +5051,6 @@ impl Editor {
             window,
             cx,
         );
-    }
-
-    fn add_edit_breakpoint_block(
-        &mut self,
-        anchor: Anchor,
-        breakpoint: &Breakpoint,
-        edit_action: BreakpointPromptEditAction,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let weak_editor = cx.weak_entity();
-        let bp_prompt = cx.new(|cx| {
-            BreakpointPromptEditor::new(
-                weak_editor,
-                anchor,
-                breakpoint.clone(),
-                edit_action,
-                window,
-                cx,
-            )
-        });
-
-        let height = bp_prompt.update(cx, |this, cx| {
-            this.prompt
-                .update(cx, |prompt, cx| prompt.max_point(cx).row().0 + 1 + 2)
-        });
-        let cloned_prompt = bp_prompt.clone();
-        let blocks = vec![BlockProperties {
-            style: BlockStyle::Sticky,
-            placement: BlockPlacement::Above(anchor),
-            height: Some(height),
-            render: Arc::new(move |cx| {
-                *cloned_prompt.read(cx).editor_margins.lock() = *cx.margins;
-                cloned_prompt.clone().into_any_element()
-            }),
-            priority: 0,
-        }];
-
-        let focus_handle = bp_prompt.focus_handle(cx);
-        window.focus(&focus_handle, cx);
-
-        let block_ids = self.insert_blocks(blocks, None, cx);
-        bp_prompt.update(cx, |prompt, _| {
-            prompt.add_block_ids(block_ids);
-        });
-    }
-
-    pub(crate) fn breakpoint_at_row(
-        &self,
-        row: u32,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<(Anchor, Breakpoint)> {
-        let snapshot = self.snapshot(window, cx);
-        let breakpoint_position = snapshot.buffer_snapshot().anchor_before(Point::new(row, 0));
-
-        self.breakpoint_at_anchor(breakpoint_position, &snapshot, cx)
-    }
-
-    pub(crate) fn breakpoint_at_anchor(
-        &self,
-        breakpoint_position: Anchor,
-        snapshot: &EditorSnapshot,
-        cx: &mut Context<Self>,
-    ) -> Option<(Anchor, Breakpoint)> {
-        let (breakpoint_position, _) = snapshot
-            .buffer_snapshot()
-            .anchor_to_buffer_anchor(breakpoint_position)?;
-        let buffer = self.buffer.read(cx).buffer(breakpoint_position.buffer_id)?;
-
-        let buffer_snapshot = buffer.read(cx).snapshot();
-
-        let row = buffer_snapshot
-            .summary_for_anchor::<text::PointUtf16>(&breakpoint_position)
-            .row;
-
-        let line_len = buffer_snapshot.line_len(row);
-        let anchor_end = buffer_snapshot.anchor_after(Point::new(row, line_len));
-
-        self.breakpoint_store
-            .as_ref()?
-            .read_with(cx, |breakpoint_store, cx| {
-                breakpoint_store
-                    .breakpoints(
-                        &buffer,
-                        Some(breakpoint_position..anchor_end),
-                        &buffer_snapshot,
-                        cx,
-                    )
-                    .next()
-                    .and_then(|(bp, _)| {
-                        let breakpoint_row = buffer_snapshot
-                            .summary_for_anchor::<text::PointUtf16>(&bp.position)
-                            .row;
-
-                        if breakpoint_row == row {
-                            snapshot
-                                .buffer_snapshot()
-                                .anchor_in_excerpt(bp.position)
-                                .map(|position| (position, bp.bp.clone()))
-                        } else {
-                            None
-                        }
-                    })
-            })
     }
 
     pub(crate) fn bookmark_at_row(
@@ -5828,92 +5110,6 @@ impl Editor {
                         }
                     })
             })
-    }
-
-    pub fn edit_log_breakpoint(
-        &mut self,
-        _: &EditLogBreakpoint,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.breakpoint_store.is_none() {
-            return;
-        }
-
-        for (anchor, breakpoint) in self.breakpoints_at_cursors(window, cx) {
-            let breakpoint = breakpoint.unwrap_or_else(|| Breakpoint {
-                message: None,
-                state: BreakpointState::Enabled,
-                condition: None,
-                hit_condition: None,
-            });
-
-            self.add_edit_breakpoint_block(
-                anchor,
-                &breakpoint,
-                BreakpointPromptEditAction::Log,
-                window,
-                cx,
-            );
-        }
-    }
-
-    fn breakpoints_at_cursors(
-        &self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Vec<(Anchor, Option<Breakpoint>)> {
-        let snapshot = self.snapshot(window, cx);
-        let cursors = self
-            .selections
-            .disjoint_anchors_arc()
-            .iter()
-            .map(|selection| {
-                let cursor_position: Point = selection.head().to_point(&snapshot.buffer_snapshot());
-
-                let breakpoint_position = self
-                    .breakpoint_at_row(cursor_position.row, window, cx)
-                    .map(|bp| bp.0)
-                    .unwrap_or_else(|| {
-                        snapshot
-                            .display_snapshot
-                            .buffer_snapshot()
-                            .anchor_after(Point::new(cursor_position.row, 0))
-                    });
-
-                let breakpoint = self
-                    .breakpoint_at_anchor(breakpoint_position, &snapshot, cx)
-                    .map(|(anchor, breakpoint)| (anchor, Some(breakpoint)));
-
-                breakpoint.unwrap_or_else(|| (breakpoint_position, None))
-            })
-            // There might be multiple cursors on the same line; all of them should have the same anchors though as their breakpoints positions, which makes it possible to sort and dedup the list.
-            .collect::<HashMap<Anchor, _>>();
-
-        cursors.into_iter().collect()
-    }
-
-    pub fn enable_breakpoint(
-        &mut self,
-        _: &crate::actions::EnableBreakpoint,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.breakpoint_store.is_none() {
-            return;
-        }
-
-        for (anchor, breakpoint) in self.breakpoints_at_cursors(window, cx) {
-            let Some(breakpoint) = breakpoint.filter(|breakpoint| breakpoint.is_disabled()) else {
-                continue;
-            };
-            self.edit_breakpoint_at_anchor(
-                anchor,
-                breakpoint,
-                BreakpointEditAction::InvertState,
-                cx,
-            );
-        }
     }
 
     pub fn align_selections(
@@ -6008,152 +5204,6 @@ impl Editor {
                 editor.edit(edits, cx);
             });
         }
-    }
-
-    pub fn disable_breakpoint(
-        &mut self,
-        _: &crate::actions::DisableBreakpoint,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.breakpoint_store.is_none() {
-            return;
-        }
-
-        for (anchor, breakpoint) in self.breakpoints_at_cursors(window, cx) {
-            let Some(breakpoint) = breakpoint.filter(|breakpoint| breakpoint.is_enabled()) else {
-                continue;
-            };
-            self.edit_breakpoint_at_anchor(
-                anchor,
-                breakpoint,
-                BreakpointEditAction::InvertState,
-                cx,
-            );
-        }
-    }
-
-    pub fn toggle_breakpoint(
-        &mut self,
-        _: &crate::actions::ToggleBreakpoint,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.breakpoint_store.is_none() {
-            return;
-        }
-
-        for (anchor, breakpoint) in self.breakpoints_at_cursors(window, cx) {
-            if let Some(breakpoint) = breakpoint {
-                self.edit_breakpoint_at_anchor(
-                    anchor,
-                    breakpoint,
-                    BreakpointEditAction::Toggle,
-                    cx,
-                );
-            } else {
-                self.edit_breakpoint_at_anchor(
-                    anchor,
-                    Breakpoint::new_standard(),
-                    BreakpointEditAction::Toggle,
-                    cx,
-                );
-            }
-        }
-    }
-
-    pub fn edit_breakpoint_at_anchor(
-        &mut self,
-        breakpoint_position: Anchor,
-        breakpoint: Breakpoint,
-        edit_action: BreakpointEditAction,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(breakpoint_store) = &self.breakpoint_store else {
-            return;
-        };
-        let buffer_snapshot = self.buffer.read(cx).snapshot(cx);
-        let Some((position, _)) = buffer_snapshot.anchor_to_buffer_anchor(breakpoint_position)
-        else {
-            return;
-        };
-        let Some(buffer) = self.buffer.read(cx).buffer(position.buffer_id) else {
-            return;
-        };
-
-        breakpoint_store.update(cx, |breakpoint_store, cx| {
-            breakpoint_store.toggle_breakpoint(
-                buffer,
-                BreakpointWithPosition {
-                    position,
-                    bp: breakpoint,
-                },
-                edit_action,
-                cx,
-            );
-        });
-
-        cx.notify();
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn breakpoint_store(&self) -> Option<Entity<BreakpointStore>> {
-        self.breakpoint_store.clone()
-    }
-
-    fn go_to_active_debug_line(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        maybe!({
-            let breakpoint_store = self.breakpoint_store.as_ref()?;
-
-            let (active_stack_frame, debug_line_pane_id) = {
-                let store = breakpoint_store.read(cx);
-                let active_stack_frame = store.active_position().cloned();
-                let debug_line_pane_id = store.active_debug_line_pane_id();
-                (active_stack_frame, debug_line_pane_id)
-            };
-
-            let Some(active_stack_frame) = active_stack_frame else {
-                self.clear_row_highlights::<ActiveDebugLine>();
-                return None;
-            };
-
-            if let Some(debug_line_pane_id) = debug_line_pane_id {
-                if let Some(workspace) = self
-                    .workspace
-                    .as_ref()
-                    .and_then(|(workspace, _)| workspace.upgrade())
-                {
-                    let editor_pane_id = workspace
-                        .read(cx)
-                        .pane_for_item_id(cx.entity_id())
-                        .map(|pane| pane.entity_id());
-
-                    if editor_pane_id.is_some_and(|id| id != debug_line_pane_id) {
-                        self.clear_row_highlights::<ActiveDebugLine>();
-                        return None;
-                    }
-                }
-            }
-
-            let position = active_stack_frame.position;
-
-            let snapshot = self.buffer.read(cx).snapshot(cx);
-            let multibuffer_anchor = snapshot.anchor_in_excerpt(position)?;
-
-            self.clear_row_highlights::<ActiveDebugLine>();
-
-            self.go_to_line::<ActiveDebugLine>(
-                multibuffer_anchor,
-                Some(cx.theme().colors().editor_debugger_active_line_background),
-                window,
-                cx,
-            );
-
-            cx.notify();
-
-            Some(())
-        })
-        .is_some()
     }
 
     pub fn reverse_lines(&mut self, _: &ReverseLines, window: &mut Window, cx: &mut Context<Self>) {
@@ -7326,7 +6376,6 @@ impl Editor {
             }
             self.request_autoscroll(Autoscroll::fit(), cx);
             self.unmark_text(window, cx);
-            self.refresh_edit_prediction(true, false, window, cx);
             cx.emit(EditorEvent::Edited { transaction_id });
             cx.emit(EditorEvent::TransactionUndone { transaction_id });
         }
@@ -7354,7 +6403,6 @@ impl Editor {
             }
             self.request_autoscroll(Autoscroll::fit(), cx);
             self.unmark_text(window, cx);
-            self.refresh_edit_prediction(true, false, window, cx);
             cx.emit(EditorEvent::Edited { transaction_id });
         }
     }
@@ -7611,9 +6659,6 @@ impl Editor {
                                                     font_weight: Some(FontWeight::BOLD),
                                                     ..make_inlay_hints_style(cx.app)
                                                 },
-                                                edit_prediction_styles: make_suggestion_styles(
-                                                    cx.app,
-                                                ),
                                                 ..EditorStyle::default()
                                             },
                                         ))
@@ -8458,7 +7503,7 @@ impl Editor {
         if self.read_only(cx) {
             return;
         }
-        self.transact(window, cx, |this, window, cx| {
+        self.transact(window, cx, |this, _window, cx| {
             let edits = this
                 .selections
                 .all::<Point>(&this.display_snapshot(cx))
@@ -8472,7 +7517,6 @@ impl Editor {
                     (selection.range(), uuid.to_string())
                 });
             this.edit(edits, cx);
-            this.refresh_edit_prediction(true, false, window, cx);
         });
     }
 
@@ -9153,100 +8197,10 @@ impl Editor {
         cx.notify();
     }
 
-    fn on_debug_session_event(
-        &mut self,
-        _session: Entity<Session>,
-        event: &SessionEvent,
-        cx: &mut Context<Self>,
-    ) {
-        if let SessionEvent::InvalidateInlineValue = event {
-            self.refresh_inline_values(cx);
-        }
-    }
-
     pub fn refresh_inline_values(&mut self, cx: &mut Context<Self>) {
-        let Some(semantics) = self.semantics_provider.clone() else {
-            return;
-        };
-
-        if !self.inline_value_cache.enabled {
-            let inlays = std::mem::take(&mut self.inline_value_cache.inlays);
-            self.splice_inlays(&inlays, Vec::new(), cx);
-            return;
-        }
-
-        let current_execution_position = self
-            .highlighted_rows
-            .get(&TypeId::of::<ActiveDebugLine>())
-            .and_then(|lines| lines.last().map(|line| line.range.end));
-
-        self.inline_value_cache.refresh_task = cx.spawn(async move |editor, cx| {
-            let inline_values = editor
-                .update(cx, |editor, cx| {
-                    let Some(current_execution_position) = current_execution_position else {
-                        return Some(Task::ready(Ok(Vec::new())));
-                    };
-
-                    let (buffer, buffer_anchor) =
-                        editor.buffer.read_with(cx, |multibuffer, cx| {
-                            let multibuffer_snapshot = multibuffer.snapshot(cx);
-                            let (buffer_anchor, _) = multibuffer_snapshot
-                                .anchor_to_buffer_anchor(current_execution_position)?;
-                            let buffer = multibuffer.buffer(buffer_anchor.buffer_id)?;
-                            Some((buffer, buffer_anchor))
-                        })?;
-
-                    let range = buffer.read(cx).anchor_before(0)..buffer_anchor;
-
-                    semantics.inline_values(buffer, range, cx)
-                })
-                .ok()
-                .flatten()?
-                .await
-                .context("refreshing debugger inlays")
-                .log_err()?;
-
-            let mut buffer_inline_values: HashMap<BufferId, Vec<InlayHint>> = HashMap::default();
-
-            for (buffer_id, inline_value) in inline_values
-                .into_iter()
-                .map(|hint| (hint.position.buffer_id, hint))
-            {
-                buffer_inline_values
-                    .entry(buffer_id)
-                    .or_default()
-                    .push(inline_value);
-            }
-
-            editor
-                .update(cx, |editor, cx| {
-                    let snapshot = editor.buffer.read(cx).snapshot(cx);
-                    let mut new_inlays = Vec::default();
-
-                    for (_buffer_id, inline_values) in buffer_inline_values {
-                        for hint in inline_values {
-                            let Some(anchor) = snapshot.anchor_in_excerpt(hint.position) else {
-                                continue;
-                            };
-                            let inlay = Inlay::debugger(
-                                post_inc(&mut editor.next_inlay_id),
-                                anchor,
-                                hint.text(),
-                            );
-                            if !inlay.text().chars().contains(&'\n') {
-                                new_inlays.push(inlay);
-                            }
-                        }
-                    }
-
-                    let mut inlay_ids = new_inlays.iter().map(|inlay| inlay.id).collect();
-                    std::mem::swap(&mut editor.inline_value_cache.inlays, &mut inlay_ids);
-
-                    editor.splice_inlays(&inlay_ids, new_inlays, cx);
-                })
-                .ok()?;
-            Some(())
-        });
+        let inlays = std::mem::take(&mut self.inline_value_cache.inlays);
+        self.splice_inlays(&inlays, Vec::new(), cx);
+        self.inline_value_cache.refresh_task = Task::ready(Some(()));
     }
 
     fn on_buffer_event(
@@ -9259,7 +8213,7 @@ impl Editor {
         match event {
             multi_buffer::Event::Edited {
                 edited_buffer,
-                source,
+                source: _,
             } => {
                 self.scrollbar_marker_state.dirty = true;
                 self.active_indent_guides_state.dirty = true;
@@ -9270,10 +8224,6 @@ impl Editor {
                 self.refresh_matching_bracket_highlights(&snapshot, cx);
                 self.refresh_outline_symbols_at_cursor(cx);
                 self.refresh_sticky_headers(&snapshot, cx);
-                if source.is_local() && self.has_active_edit_prediction() {
-                    self.update_visible_edit_prediction(window, cx);
-                }
-
                 // Clean up orphaned review comments after edits
                 self.cleanup_orphaned_review_comments(cx);
 
@@ -9297,13 +8247,8 @@ impl Editor {
                 cx.emit(SearchEvent::MatchesInvalidated);
 
                 let Some(project) = &self.project else { return };
-                let (telemetry, is_via_ssh) = {
-                    let project = project.read(cx);
-                    let telemetry = project.client().telemetry().clone();
-                    let is_via_ssh = project.is_via_remote_server();
-                    (telemetry, is_via_ssh)
-                };
-                telemetry.log_edit_event("editor", is_via_ssh);
+                let telemetry = project.read(cx).client().telemetry().clone();
+                telemetry.log_edit_event("editor", false);
             }
             multi_buffer::Event::BufferRangesUpdated {
                 buffer,
@@ -9393,7 +8338,6 @@ impl Editor {
                 }
                 jsx_tag_auto_close::refresh_enabled_in_any_buffer(self, multibuffer, cx);
                 cx.emit(EditorEvent::Reparsed(*buffer_id));
-                self.update_edit_prediction_settings(cx);
                 cx.notify();
             }
             multi_buffer::Event::DirtyChanged => cx.emit(EditorEvent::DirtyChanged),
@@ -9490,8 +8434,6 @@ impl Editor {
             self.set_max_diagnostics_severity(new_severity, cx);
         }
         self.refresh_runnables(None, window, cx);
-        self.update_edit_prediction_settings(cx);
-        self.refresh_edit_prediction(true, false, window, cx);
         self.refresh_inline_values(cx);
 
         let old_cursor_shape = self.cursor_shape;
@@ -9935,7 +8877,9 @@ impl Editor {
             return;
         }
 
-        let Some(project) = &self.project else { return };
+        if self.project.is_none() {
+            return;
+        }
 
         // If None, we are in a file without an extension
         let file = self
@@ -9953,16 +8897,6 @@ impl Editor {
             .map(|vim_mode| vim_mode.0)
             .unwrap_or(false);
 
-        let edit_predictions_provider = all_language_settings(file, cx).edit_predictions.provider;
-        let copilot_enabled = edit_predictions_provider
-            == language::language_settings::EditPredictionProvider::Copilot;
-        let copilot_enabled_for_language = self
-            .buffer
-            .read(cx)
-            .language_settings(cx)
-            .show_edit_predictions;
-
-        let project = project.read(cx);
         let event_type = reported_event.event_type();
 
         if let ReportEditorEvent::Saved { auto_saved } = reported_event {
@@ -9971,20 +8905,12 @@ impl Editor {
                 type = if auto_saved {"autosave"} else {"manual"},
                 file_extension,
                 vim_mode,
-                copilot_enabled,
-                copilot_enabled_for_language,
-                edit_predictions_provider,
-                is_via_ssh = project.is_via_remote_server(),
             );
         } else {
             telemetry::event!(
                 event_type,
                 file_extension,
                 vim_mode,
-                copilot_enabled,
-                copilot_enabled_for_language,
-                edit_predictions_provider,
-                is_via_ssh = project.is_via_remote_server(),
             );
         };
     }
@@ -10110,17 +9036,14 @@ impl Editor {
             }
 
             self.blink_manager.update(cx, BlinkManager::enable);
-            self.show_cursor_names(window, cx);
             self.buffer.update(cx, |buffer, cx| {
                 buffer.finalize_last_transaction(cx);
-                if self.leader_id.is_none() {
-                    buffer.set_active_selections(
-                        &self.selections.disjoint_anchors_arc(),
-                        self.selections.line_mode(),
-                        self.cursor_shape,
-                        cx,
-                    );
-                }
+                buffer.set_active_selections(
+                    &self.selections.disjoint_anchors_arc(),
+                    self.selections.line_mode(),
+                    self.cursor_shape,
+                    cx,
+                );
             });
 
             if cx.is_cursor_visible()
@@ -10178,7 +9101,6 @@ impl Editor {
         {
             self.hide_context_menu(window, cx);
         }
-        self.take_active_edit_prediction(true, cx);
         cx.emit(EditorEvent::Blurred);
         cx.notify();
     }
@@ -10608,7 +9530,6 @@ impl Editor {
             syntax: cx.theme().syntax().clone(),
             status: cx.theme().status().clone(),
             inlay_hints_style: make_inlay_hints_style(cx),
-            edit_prediction_styles: make_suggestion_styles(cx),
             unnecessary_code_fade: settings.unnecessary_code_fade,
             show_underlines: self.diagnostics_enabled(),
         }
@@ -10878,28 +9799,6 @@ struct CompletionEdit {
     snippet: Option<Snippet>,
 }
 
-pub trait CollaborationHub {
-    fn collaborators<'a>(&self, cx: &'a App) -> &'a HashMap<PeerId, Collaborator>;
-    fn user_participant_indices<'a>(&self, cx: &'a App) -> &'a HashMap<u64, ParticipantIndex>;
-    fn user_names(&self, cx: &App) -> HashMap<u64, SharedString>;
-}
-
-impl CollaborationHub for Entity<Project> {
-    fn collaborators<'a>(&self, cx: &'a App) -> &'a HashMap<PeerId, Collaborator> {
-        self.read(cx).collaborators()
-    }
-
-    fn user_participant_indices<'a>(&self, cx: &'a App) -> &'a HashMap<u64, ParticipantIndex> {
-        self.read(cx).user_store().read(cx).participant_indices()
-    }
-
-    fn user_names(&self, cx: &App) -> HashMap<u64, SharedString> {
-        let this = self.read(cx);
-        let user_ids = this.collaborators().values().map(|c| c.user_id);
-        this.user_store().read(cx).participant_names(user_ids, cx)
-    }
-}
-
 pub trait SemanticsProvider {
     fn hover(
         &self,
@@ -10907,13 +9806,6 @@ pub trait SemanticsProvider {
         position: text::Anchor,
         cx: &mut App,
     ) -> Option<Task<Option<Vec<project::Hover>>>>;
-
-    fn inline_values(
-        &self,
-        buffer_handle: Entity<Buffer>,
-        range: Range<text::Anchor>,
-        cx: &mut App,
-    ) -> Option<Task<anyhow::Result<Vec<InlayHint>>>>;
 
     fn applicable_inlay_chunks(
         &self,
@@ -11016,13 +9908,6 @@ impl SemanticsProvider for WeakEntity<Project> {
 
     fn supports_inlay_hints(&self, buffer: &Entity<Buffer>, cx: &mut App) -> bool {
         self.update(cx, |project, cx| {
-            if project
-                .active_debug_session(cx)
-                .is_some_and(|(session, _)| session.read(cx).any_stopped_thread())
-            {
-                return true;
-            }
-
             buffer.update(cx, |buffer, cx| {
                 project.any_language_server_supports_inlay_hints(buffer, cx)
             })
@@ -11037,21 +9922,6 @@ impl SemanticsProvider for WeakEntity<Project> {
             })
         })
         .unwrap_or(false)
-    }
-
-    fn inline_values(
-        &self,
-        buffer_handle: Entity<Buffer>,
-        range: Range<text::Anchor>,
-        cx: &mut App,
-    ) -> Option<Task<anyhow::Result<Vec<InlayHint>>>> {
-        self.update(cx, |project, cx| {
-            let (session, active_stack_frame) = project.active_debug_session(cx)?;
-
-            Some(project.inline_values(session, active_stack_frame, buffer_handle, range, cx))
-        })
-        .ok()
-        .flatten()
     }
 
     fn applicable_inlay_chunks(
@@ -11195,53 +10065,6 @@ fn ending_row(next_selection: &Selection<Point>, display_map: &DisplaySnapshot) 
 }
 
 impl EditorSnapshot {
-    pub fn remote_selections_in_range<'a>(
-        &'a self,
-        range: &'a Range<Anchor>,
-        collaboration_hub: &dyn CollaborationHub,
-        cx: &'a App,
-    ) -> impl 'a + Iterator<Item = RemoteSelection> {
-        let participant_names = collaboration_hub.user_names(cx);
-        let participant_indices = collaboration_hub.user_participant_indices(cx);
-        let collaborators_by_peer_id = collaboration_hub.collaborators(cx);
-        let collaborators_by_replica_id = collaborators_by_peer_id
-            .values()
-            .map(|collaborator| (collaborator.replica_id, collaborator))
-            .collect::<HashMap<_, _>>();
-        self.buffer_snapshot()
-            .selections_in_range(range, false)
-            .filter_map(move |(replica_id, line_mode, cursor_shape, selection)| {
-                if replica_id == ReplicaId::AGENT {
-                    Some(RemoteSelection {
-                        replica_id,
-                        selection,
-                        cursor_shape,
-                        line_mode,
-                        collaborator_id: CollaboratorId::Agent,
-                        user_name: Some("Agent".into()),
-                        color: cx.theme().players().agent(),
-                    })
-                } else {
-                    let collaborator = collaborators_by_replica_id.get(&replica_id)?;
-                    let participant_index = participant_indices.get(&collaborator.user_id).copied();
-                    let user_name = participant_names.get(&collaborator.user_id).cloned();
-                    Some(RemoteSelection {
-                        replica_id,
-                        selection,
-                        cursor_shape,
-                        line_mode,
-                        collaborator_id: CollaboratorId::PeerId(collaborator.peer_id),
-                        user_name,
-                        color: if let Some(index) = participant_index {
-                            cx.theme().players().color_for_participant(index.0)
-                        } else {
-                            cx.theme().players().absent()
-                        },
-                    })
-                }
-            })
-    }
-
     pub fn language_at<T: ToOffset>(&self, position: T) -> Option<&Arc<Language>> {
         self.display_snapshot
             .buffer_snapshot()
@@ -11301,7 +10124,6 @@ impl EditorSnapshot {
             };
 
             let show_runnables = self.show_runnables.unwrap_or(gutter_settings.runnables);
-            let show_breakpoints = self.show_breakpoints.unwrap_or(gutter_settings.breakpoints);
             let show_bookmarks = self.show_bookmarks.unwrap_or(gutter_settings.bookmarks);
 
             let git_blame_entries_width =
@@ -11326,9 +10148,7 @@ impl EditorSnapshot {
             let left_padding = git_blame_entries_width.unwrap_or(Pixels::ZERO)
                 + if !is_singleton {
                     ch_width * 4.0
-                // runnables, breakpoints and bookmarks are shown in the same place
-                // if all three are there only the runnable is shown
-                } else if show_runnables || show_breakpoints || show_bookmarks {
+                } else if show_runnables || show_bookmarks {
                     ch_width * 3.0
                 } else if show_git_gutter && show_line_numbers {
                     ch_width * 2.0
@@ -11916,237 +10736,6 @@ fn collapse_multiline_range(range: Range<Point>) -> Range<Point> {
 }
 
 const UPDATE_DEBOUNCE: Duration = Duration::from_millis(50);
-
-enum BreakpointPromptEditAction {
-    Log,
-    Condition,
-    HitCondition,
-}
-
-struct BreakpointPromptEditor {
-    pub(crate) prompt: Entity<Editor>,
-    editor: WeakEntity<Editor>,
-    breakpoint_anchor: Anchor,
-    breakpoint: Breakpoint,
-    edit_action: BreakpointPromptEditAction,
-    block_ids: HashSet<CustomBlockId>,
-    editor_margins: Arc<Mutex<EditorMargins>>,
-    _subscriptions: Vec<Subscription>,
-}
-
-impl BreakpointPromptEditor {
-    const MAX_LINES: u8 = 4;
-
-    fn new(
-        editor: WeakEntity<Editor>,
-        breakpoint_anchor: Anchor,
-        breakpoint: Breakpoint,
-        edit_action: BreakpointPromptEditAction,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Self {
-        let base_text = match edit_action {
-            BreakpointPromptEditAction::Log => breakpoint.message.as_ref(),
-            BreakpointPromptEditAction::Condition => breakpoint.condition.as_ref(),
-            BreakpointPromptEditAction::HitCondition => breakpoint.hit_condition.as_ref(),
-        }
-        .map(|msg| msg.to_string())
-        .unwrap_or_default();
-
-        let buffer = cx.new(|cx| Buffer::local(base_text, cx));
-        let buffer = cx.new(|cx| MultiBuffer::singleton(buffer, cx));
-
-        let prompt = cx.new(|cx| {
-            let mut prompt = Editor::new(
-                EditorMode::AutoHeight {
-                    min_lines: 1,
-                    max_lines: Some(Self::MAX_LINES as usize),
-                },
-                buffer,
-                None,
-                window,
-                cx,
-            );
-            prompt.set_soft_wrap_mode(language::language_settings::SoftWrap::EditorWidth, cx);
-            prompt.set_show_cursor_when_unfocused(false, cx);
-            prompt.set_placeholder_text(
-                match edit_action {
-                    BreakpointPromptEditAction::Log => "Message to log when a breakpoint is hit. Expressions within {} are interpolated.",
-                    BreakpointPromptEditAction::Condition => "Condition when a breakpoint is hit. Expressions within {} are interpolated.",
-                    BreakpointPromptEditAction::HitCondition => "How many breakpoint hits to ignore",
-                },
-                window,
-                cx,
-            );
-
-            prompt
-        });
-
-        Self {
-            prompt,
-            editor,
-            breakpoint_anchor,
-            breakpoint,
-            edit_action,
-            editor_margins: Arc::new(Mutex::new(EditorMargins::default())),
-            block_ids: Default::default(),
-            _subscriptions: vec![],
-        }
-    }
-
-    pub(crate) fn add_block_ids(&mut self, block_ids: Vec<CustomBlockId>) {
-        self.block_ids.extend(block_ids)
-    }
-
-    fn confirm(&mut self, _: &menu::Confirm, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(editor) = self.editor.upgrade() {
-            let message = self
-                .prompt
-                .read(cx)
-                .buffer
-                .read(cx)
-                .as_singleton()
-                .expect("A multi buffer in breakpoint prompt isn't possible")
-                .read(cx)
-                .as_rope()
-                .to_string();
-
-            editor.update(cx, |editor, cx| {
-                editor.edit_breakpoint_at_anchor(
-                    self.breakpoint_anchor,
-                    self.breakpoint.clone(),
-                    match self.edit_action {
-                        BreakpointPromptEditAction::Log => {
-                            BreakpointEditAction::EditLogMessage(message.into())
-                        }
-                        BreakpointPromptEditAction::Condition => {
-                            BreakpointEditAction::EditCondition(message.into())
-                        }
-                        BreakpointPromptEditAction::HitCondition => {
-                            BreakpointEditAction::EditHitCondition(message.into())
-                        }
-                    },
-                    cx,
-                );
-
-                editor.remove_blocks(self.block_ids.clone(), None, cx);
-                cx.focus_self(window);
-            });
-        }
-    }
-
-    fn cancel(&mut self, _: &menu::Cancel, window: &mut Window, cx: &mut Context<Self>) {
-        self.editor
-            .update(cx, |editor, cx| {
-                editor.remove_blocks(self.block_ids.clone(), None, cx);
-                window.focus(&editor.focus_handle, cx);
-            })
-            .log_err();
-    }
-
-    fn render_prompt_editor(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let settings = ThemeSettings::get_global(cx);
-        let text_style = TextStyle {
-            color: if self.prompt.read(cx).read_only(cx) {
-                cx.theme().colors().text_disabled
-            } else {
-                cx.theme().colors().text
-            },
-            font_family: settings.buffer_font.family.clone(),
-            font_fallbacks: settings.buffer_font.fallbacks.clone(),
-            font_size: settings.buffer_font_size(cx).into(),
-            font_weight: settings.buffer_font.weight,
-            line_height: relative(settings.buffer_line_height.value()),
-            ..Default::default()
-        };
-        EditorElement::new(
-            &self.prompt,
-            EditorStyle {
-                background: cx.theme().colors().editor_background,
-                local_player: cx.theme().players().local(),
-                text: text_style,
-                ..Default::default()
-            },
-        )
-    }
-
-    fn render_close_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let focus_handle = self.prompt.focus_handle(cx);
-        IconButton::new("cancel", IconName::Close)
-            .icon_color(Color::Muted)
-            .shape(IconButtonShape::Square)
-            .tooltip(move |_window, cx| {
-                Tooltip::for_action_in("Cancel", &menu::Cancel, &focus_handle, cx)
-            })
-            .on_click(cx.listener(|this, _, window, cx| {
-                this.cancel(&menu::Cancel, window, cx);
-            }))
-    }
-
-    fn render_confirm_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let focus_handle = self.prompt.focus_handle(cx);
-        IconButton::new("confirm", IconName::Return)
-            .icon_color(Color::Muted)
-            .shape(IconButtonShape::Square)
-            .tooltip(move |_window, cx| {
-                Tooltip::for_action_in("Confirm", &menu::Confirm, &focus_handle, cx)
-            })
-            .on_click(cx.listener(|this, _, window, cx| {
-                this.confirm(&menu::Confirm, window, cx);
-            }))
-    }
-}
-
-impl Render for BreakpointPromptEditor {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let ui_font_size = ThemeSettings::get_global(cx).ui_font_size(cx);
-        let editor_margins = *self.editor_margins.lock();
-        let gutter_dimensions = editor_margins.gutter;
-        let left_gutter_width = gutter_dimensions.full_width() + (gutter_dimensions.margin / 2.0);
-        let right_padding = editor_margins.right + px(9.);
-        h_flex()
-            .key_context("Editor")
-            .bg(cx.theme().colors().editor_background)
-            .border_y_1()
-            .border_color(cx.theme().status().info_border)
-            .size_full()
-            .py(window.line_height() / 2.5)
-            .pr(right_padding)
-            .on_action(cx.listener(Self::confirm))
-            .on_action(cx.listener(Self::cancel))
-            .child(
-                WithRemSize::new(ui_font_size)
-                    .h_full()
-                    .w(left_gutter_width)
-                    .flex()
-                    .flex_row()
-                    .flex_shrink_0()
-                    .items_center()
-                    .justify_center()
-                    .gap_1()
-                    .child(self.render_close_button(cx)),
-            )
-            .child(
-                h_flex()
-                    .w_full()
-                    .justify_between()
-                    .child(div().flex_1().child(self.render_prompt_editor(cx)))
-                    .child(
-                        WithRemSize::new(ui_font_size)
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .child(self.render_confirm_button(cx)),
-                    ),
-            )
-    }
-}
-
-impl Focusable for BreakpointPromptEditor {
-    fn focus_handle(&self, cx: &App) -> FocusHandle {
-        self.prompt.focus_handle(cx)
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LineHighlight {

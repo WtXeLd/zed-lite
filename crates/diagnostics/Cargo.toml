@@ -12,8 +12,12 @@ workspace = true
 path = "src/diagnostics.rs"
 doctest = false
 
+[features]
+test-support = []
+default = []
+lite = []
+
 [dependencies]
-agent_settings.workspace = true
 anyhow.workspace = true
 collections.workspace = true
 component.workspace = true

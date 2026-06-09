@@ -26,10 +26,7 @@ mod toolchain;
 #[cfg(test)]
 pub mod buffer_tests;
 
-pub use crate::language_settings::{
-    AutoIndentMode, EditPredictionPromptFormat, EditPredictionsMode, IndentGuideSettings,
-    ZetaVersion,
-};
+pub use crate::language_settings::{AutoIndentMode, IndentGuideSettings};
 use anyhow::{Context as _, Result};
 use async_trait::async_trait;
 use collections::{HashMap, HashSet};
@@ -998,23 +995,6 @@ impl Language {
             .code_fence_block_name
             .clone()
             .unwrap_or_else(|| self.config.name.as_ref().to_lowercase().into())
-    }
-
-    pub fn matches_kernel_language(&self, kernel_language: &str) -> bool {
-        let kernel_language_lower = kernel_language.to_lowercase();
-
-        if self.code_fence_block_name().to_lowercase() == kernel_language_lower {
-            return true;
-        }
-
-        if self.config.name.as_ref().to_lowercase() == kernel_language_lower {
-            return true;
-        }
-
-        self.config
-            .kernel_language_names
-            .iter()
-            .any(|name| name.to_lowercase() == kernel_language_lower)
     }
 
     pub fn context_provider(&self) -> Option<Arc<dyn ContextProvider>> {

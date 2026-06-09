@@ -3336,11 +3336,11 @@ async fn test_history_items_vs_very_good_external_match(cx: &mut gpui::TestAppCo
         .insert_tree(
             path!("/src"),
             json!({
-                "collab_ui": {
+                "project_ui": {
                     "first.rs": "// First Rust file",
                     "second.rs": "// Second Rust file",
                     "third.rs": "// Third Rust file",
-                    "collab_ui.rs": "// Fourth Rust file",
+                    "project_ui.rs": "// Fourth Rust file",
                 }
             }),
         )
@@ -3357,17 +3357,17 @@ async fn test_history_items_vs_very_good_external_match(cx: &mut gpui::TestAppCo
     open_close_queried_buffer("sec", 1, "second.rs", &workspace, cx).await;
 
     let finder = open_file_picker(&workspace, cx);
-    let query = "collab_ui";
+    let query = "project_ui";
     cx.simulate_input(query);
     finder.update(cx, |picker, _| {
             let search_entries = collect_search_matches(picker).search_paths_only();
             assert_eq!(
                 search_entries,
                 vec![
-                    rel_path("collab_ui/collab_ui.rs").into(),
-                    rel_path("collab_ui/first.rs").into(),
-                    rel_path("collab_ui/third.rs").into(),
-                    rel_path("collab_ui/second.rs").into(),
+                    rel_path("project_ui/project_ui.rs").into(),
+                    rel_path("project_ui/first.rs").into(),
+                    rel_path("project_ui/third.rs").into(),
+                    rel_path("project_ui/second.rs").into(),
                 ],
                 "Despite all search results having the same directory name, the most matching one should be on top"
             );
@@ -4912,9 +4912,9 @@ async fn test_start_of_word_preferred_over_scattered_match(cx: &mut TestAppConte
             "/src",
             json!({
                 "crates": {
-                    "livekit_client": {
+                    "playback": {
                         "src": {
-                            "livekit_client": {
+                            "media": {
                                 "playback.rs": "",
                             }
                         }
@@ -4943,7 +4943,7 @@ async fn test_start_of_word_preferred_over_scattered_match(cx: &mut TestAppConte
         assert!(!matches.is_empty(),);
         assert_eq!(
             matches[0].path.as_unix_str(),
-            "crates/livekit_client/src/livekit_client/playback.rs",
+                "crates/playback/src/media/playback.rs",
         );
     });
 }
@@ -5005,10 +5005,10 @@ async fn test_exact_filename_with_directory_token(cx: &mut TestAppContext) {
             "/src",
             json!({
                 "crates": {
-                    "agent_servers": {
+                    "language_servers": {
                         "src": {
-                            "acp.rs": "",
-                            "agent_server.rs": "",
+                            "json.rs": "",
+                            "language_server.rs": "",
                             "custom.rs": "",
                         }
                     }
@@ -5023,7 +5023,7 @@ async fn test_exact_filename_with_directory_token(cx: &mut TestAppContext) {
         .update_in(cx, |picker, window, cx| {
             picker
                 .delegate
-                .spawn_search(test_path_position("acp server"), window, cx)
+                .spawn_search(test_path_position("json server"), window, cx)
         })
         .await;
     picker.update(cx, |picker, _| {
@@ -5031,7 +5031,7 @@ async fn test_exact_filename_with_directory_token(cx: &mut TestAppContext) {
         assert!(!matches.is_empty(),);
         assert_eq!(
             matches[0].path.as_unix_str(),
-            "crates/agent_servers/src/acp.rs",
+            "crates/language_servers/src/json.rs",
         );
     });
 }

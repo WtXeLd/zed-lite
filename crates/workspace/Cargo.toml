@@ -13,21 +13,21 @@ path = "src/workspace.rs"
 doctest = false
 
 [features]
+lite = []
 test-support = [
     "client/test-support",
-    "http_client/test-support",
     "db/test-support",
+    "fs/test-support",
+    "gpui/test-support",
+    "http_client/test-support",
     "project/test-support",
-    "remote/test-support",
     "session/test-support",
     "settings/test-support",
-    "gpui/test-support",
-    "fs/test-support",
 ]
+default = []
 
 [dependencies]
 any_vec.workspace = true
-agent_settings.workspace = true
 anyhow.workspace = true
 async-recursion.workspace = true
 client.workspace = true
@@ -52,7 +52,6 @@ node_runtime.workspace = true
 parking_lot.workspace = true
 postage.workspace = true
 project.workspace = true
-remote.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -79,7 +78,6 @@ db = { workspace = true, features = ["test-support"] }
 fs = { workspace = true, features = ["test-support"] }
 gpui = { workspace = true, features = ["test-support"] }
 project = { workspace = true, features = ["test-support"] }
-remote = { workspace = true, features = ["test-support"] }
 session = { workspace = true, features = ["test-support"] }
 settings = { workspace = true, features = ["test-support"] }
 http_client = { workspace = true, features = ["test-support"] }

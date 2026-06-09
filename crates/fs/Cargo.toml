@@ -59,4 +59,5 @@ gpui = { workspace = true, features = ["test-support"] }
 git = { workspace = true, features = ["test-support"] }
 
 [features]
+lite = []
 test-support = ["gpui/test-support", "git/test-support", "util/test-support"]

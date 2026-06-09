@@ -22,10 +22,9 @@ fn git_sha() -> Option<String> {
 fn product_version() -> String {
     let commit_sha = git_sha();
     let pkg_version = std::env::var("CARGO_PKG_VERSION").unwrap_or_default();
-    let channel = std::env::var("RELEASE_CHANNEL").unwrap_or_else(|_| "dev".into());
     let build_id = std::env::var("GITHUB_RUN_NUMBER").ok();
 
-    let mut metadata = channel;
+    let mut metadata = String::from("lite");
     if let Some(build_id) = &build_id {
         metadata.push('.');
         metadata.push_str(build_id);
@@ -42,13 +41,7 @@ const ICON_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../zed/resources/wi
 const MANIFEST_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/resources/manifest.xml");
 
 pub fn compile(manifest: bool) -> Result<(), Box<dyn std::error::Error>> {
-    let channel = option_env!("RELEASE_CHANNEL").unwrap_or("dev");
-    let (icon_filename, product_name) = match channel {
-        "stable" => ("app-icon.ico", "Zed"),
-        "preview" => ("app-icon-preview.ico", "Zed Preview"),
-        "nightly" => ("app-icon-nightly.ico", "Zed Nightly"),
-        _ => ("app-icon-dev.ico", "Zed Dev"),
-    };
+    let (icon_filename, product_name) = ("app-icon.ico", "Zed Lite");
     let icon = std::path::PathBuf::from(ICON_DIR).join(icon_filename);
     let icon_escaped = icon.to_string_lossy().replace('\\', "\\\\");
 

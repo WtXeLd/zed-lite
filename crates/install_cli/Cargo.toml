@@ -12,6 +12,7 @@ workspace = true
 path = "src/install_cli.rs"
 
 [features]
+lite = []
 test-support = []
 
 [dependencies]

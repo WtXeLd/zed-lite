@@ -9,7 +9,7 @@ use workspace::Workspace;
 
 mod modal;
 
-pub use modal::{Rerun, ShowAttachModal, Spawn, TaskOverrides, TasksModal};
+pub use modal::{Rerun, Spawn, TaskOverrides, TasksModal};
 
 pub fn init(cx: &mut App) {
     cx.observe_new(
@@ -101,11 +101,6 @@ fn spawn_task_or_modal(
     window: &mut Window,
     cx: &mut Context<Workspace>,
 ) {
-    if let Some(provider) = workspace.debugger_provider() {
-        provider.spawn_task_or_modal(workspace, action, window, cx);
-        return;
-    }
-
     match action {
         Spawn::ByName {
             task_name,
@@ -148,34 +143,27 @@ pub fn toggle_modal(
 ) -> Task<()> {
     let task_store = workspace.project().read(cx).task_store().clone();
     let workspace_handle = workspace.weak_handle();
-    let can_open_modal = workspace
-        .project()
-        .read_with(cx, |project, _| !project.is_via_collab());
-    if can_open_modal {
-        let task_contexts = task_contexts(workspace, window, cx);
-        cx.spawn_in(window, async move |workspace, cx| {
-            let task_contexts = Arc::new(task_contexts.await);
-            workspace
-                .update_in(cx, |workspace, window, cx| {
-                    workspace.toggle_modal(window, cx, |window, cx| {
-                        TasksModal::new(
-                            task_store.clone(),
-                            task_contexts,
-                            reveal_target.map(|target| TaskOverrides {
-                                reveal_target: Some(target),
-                            }),
-                            true,
-                            workspace_handle,
-                            window,
-                            cx,
-                        )
-                    })
+    let task_contexts = task_contexts(workspace, window, cx);
+    cx.spawn_in(window, async move |workspace, cx| {
+        let task_contexts = Arc::new(task_contexts.await);
+        workspace
+            .update_in(cx, |workspace, window, cx| {
+                workspace.toggle_modal(window, cx, |window, cx| {
+                    TasksModal::new(
+                        task_store.clone(),
+                        task_contexts,
+                        reveal_target.map(|target| TaskOverrides {
+                            reveal_target: Some(target),
+                        }),
+                        true,
+                        workspace_handle,
+                        window,
+                        cx,
+                    )
                 })
-                .ok();
-        })
-    } else {
-        Task::ready(())
-    }
+            })
+            .ok();
+    })
 }
 
 pub fn spawn_tasks_filtered<F>(
@@ -618,7 +606,6 @@ mod tests {
             let state = AppState::test(cx);
             crate::init(cx);
             editor::init(cx);
-            TaskStore::init(None);
             state
         })
     }

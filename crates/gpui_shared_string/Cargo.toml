@@ -7,6 +7,10 @@ edition.workspace = true
 [lib]
 path = "gpui_shared_string.rs"
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 schemars.workspace = true
 serde.workspace = true

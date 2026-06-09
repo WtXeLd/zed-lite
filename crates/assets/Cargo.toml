@@ -11,6 +11,10 @@ path = "src/assets.rs"
 [lints]
 workspace = true
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 anyhow.workspace = true
 gpui.workspace = true

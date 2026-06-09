@@ -12,6 +12,10 @@ workspace = true
 path = "src/outline_panel.rs"
 doctest = false
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 anyhow.workspace = true
 async-channel.workspace = true

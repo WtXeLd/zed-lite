@@ -11,6 +11,10 @@ workspace = true
 [lib]
 path = "src/snippets_ui.rs"
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 file_icons.workspace = true
 fuzzy.workspace = true

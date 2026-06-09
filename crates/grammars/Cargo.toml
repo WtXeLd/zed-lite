@@ -37,6 +37,7 @@ tree-sitter-typescript = { workspace = true, optional = true }
 tree-sitter-yaml = { workspace = true, optional = true }
 
 [features]
+lite = []
 load-grammars = [
     "tree-sitter",
     "tree-sitter-bash",

@@ -13,6 +13,7 @@ path = "src/text.rs"
 doctest = false
 
 [features]
+lite = []
 test-support = ["rand", "util/test-support"]
 
 [dependencies]

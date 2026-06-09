@@ -3281,16 +3281,6 @@ impl Pane {
 
                             let visible_in_project_panel = relative_path.is_some()
                                 && worktree.is_some_and(|worktree| worktree.read(cx).is_visible());
-                            let is_local = pane.read(cx).project.upgrade().is_some_and(|project| {
-                                let project = project.read(cx);
-                                project.is_local() || project.is_via_wsl_with_host_interop(cx)
-                            });
-                            let is_remote = pane
-                                .read(cx)
-                                .project
-                                .upgrade()
-                                .is_some_and(|project| project.read(cx).is_remote());
-
                             let entry_id = entry.to_proto();
 
                             menu = menu
@@ -3322,24 +3312,20 @@ impl Pane {
                                         }),
                                     )
                                 })
-                                .when(is_local, |menu| {
-                                    menu.when_some(reveal_path, |menu, reveal_path| {
-                                        menu.separator().entry(
-                                            ui::utils::reveal_in_file_manager_label(is_remote),
-                                            Some(Box::new(
-                                                zed_actions::editor::RevealInFileManager,
-                                            )),
-                                            window.handler_for(&pane, move |pane, _, cx| {
-                                                if let Some(project) = pane.project.upgrade() {
-                                                    project.update(cx, |project, cx| {
-                                                        project.reveal_path(&reveal_path, cx);
-                                                    });
-                                                } else {
-                                                    cx.reveal_path(&reveal_path);
-                                                }
-                                            }),
-                                        )
-                                    })
+                                .when_some(reveal_path, |menu, reveal_path| {
+                                    menu.separator().entry(
+                                        ui::utils::reveal_in_file_manager_label(false),
+                                        Some(Box::new(zed_actions::editor::RevealInFileManager)),
+                                        window.handler_for(&pane, move |pane, _, cx| {
+                                            if let Some(project) = pane.project.upgrade() {
+                                                project.update(cx, |project, cx| {
+                                                    project.reveal_path(&reveal_path, cx);
+                                                });
+                                            } else {
+                                                cx.reveal_path(&reveal_path);
+                                            }
+                                        }),
+                                    )
                                 })
                                 .map(pin_tab_entries)
                                 .when(visible_in_project_panel, |menu| {
@@ -3365,7 +3351,6 @@ impl Pane {
                                             window.dispatch_action(
                                                 OpenTerminal {
                                                     working_directory: parent_abs_path.clone(),
-                                                    local: false,
                                                 }
                                                 .boxed_clone(),
                                                 cx,
@@ -4052,24 +4037,6 @@ impl Pane {
         let mut to_pane = cx.entity();
         let mut split_direction = self.drag_split_direction;
         let paths = paths.paths().to_vec();
-        let is_remote = self
-            .workspace
-            .update(cx, |workspace, cx| {
-                if workspace.project().read(cx).is_via_collab() {
-                    workspace.show_error(
-                        &anyhow::anyhow!("Cannot drop files on a remote project"),
-                        cx,
-                    );
-                    true
-                } else {
-                    false
-                }
-            })
-            .unwrap_or(true);
-        if is_remote {
-            return;
-        }
-
         self.workspace
             .update(cx, |workspace, cx| {
                 let fs = Arc::clone(workspace.project().read(cx).fs());

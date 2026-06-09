@@ -65,21 +65,6 @@ static CURRENT_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 /// On Windows, this is `%APPDATA%\Zed`.
 static CONFIG_DIR: OnceLock<PathBuf> = OnceLock::new();
 
-/// Returns the relative path to the zed_server directory on the ssh host.
-pub fn remote_server_dir_relative() -> &'static RelPath {
-    static CACHED: LazyLock<&'static RelPath> =
-        LazyLock::new(|| RelPath::unix(".zed_server").unwrap());
-    *CACHED
-}
-
-// Remove this once 223 goes stable
-/// Returns the relative path to the zed_wsl_server directory on the wsl host.
-pub fn remote_wsl_server_dir_relative() -> &'static RelPath {
-    static CACHED: LazyLock<&'static RelPath> =
-        LazyLock::new(|| RelPath::unix(".zed_wsl_server").unwrap());
-    *CACHED
-}
-
 /// Sets a custom directory for all user data, overriding the default data directory.
 /// This function must be called before any other path operations that depend on the data directory.
 /// The directory's path will be canonicalized to an absolute path by a blocking FS operation.
@@ -236,12 +221,6 @@ pub fn logs_dir() -> &'static PathBuf {
     })
 }
 
-/// Returns the path to the Zed server directory on this SSH host.
-pub fn remote_server_state_dir() -> &'static PathBuf {
-    static REMOTE_SERVER_STATE: OnceLock<PathBuf> = OnceLock::new();
-    REMOTE_SERVER_STATE.get_or_init(|| data_dir().join("server_state"))
-}
-
 /// Returns the path to the `Zed.log` file.
 pub fn log_file() -> &'static PathBuf {
     static LOG_FILE: OnceLock<PathBuf> = OnceLock::new();
@@ -310,38 +289,6 @@ pub fn tasks_file() -> &'static PathBuf {
     TASKS_FILE.get_or_init(|| config_dir().join("tasks.json"))
 }
 
-/// Returns the path to the `debug.json` file.
-pub fn debug_scenarios_file() -> &'static PathBuf {
-    static DEBUG_SCENARIOS_FILE: OnceLock<PathBuf> = OnceLock::new();
-    DEBUG_SCENARIOS_FILE.get_or_init(|| config_dir().join("debug.json"))
-}
-
-/// Returns the path to the user-global `AGENTS.md` file.
-///
-/// This file holds personal agent instructions that apply to every project the
-/// user opens, and is loaded into the native Zed agent's system prompt.
-pub fn agents_file() -> &'static PathBuf {
-    static AGENTS_FILE: OnceLock<PathBuf> = OnceLock::new();
-    AGENTS_FILE.get_or_init(|| config_dir().join("AGENTS.md"))
-}
-
-/// User-facing display form of the user-global `AGENTS.md` file path —
-/// i.e. what a human should see in messages and prompts, with the
-/// platform's native path separator and home/config directory shorthand.
-///
-/// Windows doesn't recognize `~` as the home directory, so the env-var
-/// form (`%APPDATA%`) is used there instead. Note that this is the
-/// *typical* location: a user with `XDG_CONFIG_HOME` set or running in a
-/// Flatpak sandbox would see a different `agents_file()` at runtime than
-/// this displays. The display string trades that precision for
-/// readability in announcement copy.
-#[cfg(target_os = "windows")]
-pub const GLOBAL_AGENTS_FILE_DISPLAY: &str =
-    const_format::concatcp!("%APPDATA%\\", APP_NAME, "\\AGENTS.md");
-#[cfg(not(target_os = "windows"))]
-pub const GLOBAL_AGENTS_FILE_DISPLAY: &str =
-    const_format::concatcp!("~/.config/", APP_NAME_LOWERCASE, "/AGENTS.md");
-
 /// Returns the path to the extensions directory.
 ///
 /// This is where installed extensions are stored.
@@ -380,61 +327,6 @@ pub fn snippets_dir() -> &'static PathBuf {
     SNIPPETS_DIR.get_or_init(|| config_dir().join("snippets"))
 }
 
-/// Returns the path to the contexts directory.
-///
-/// This is where the prompts for use with the Assistant are stored.
-pub fn prompts_dir() -> &'static PathBuf {
-    static PROMPTS_DIR: OnceLock<PathBuf> = OnceLock::new();
-    PROMPTS_DIR.get_or_init(|| {
-        if cfg!(target_os = "macos") {
-            config_dir().join("prompts")
-        } else {
-            data_dir().join("prompts")
-        }
-    })
-}
-
-/// Returns the path to the prompt templates directory.
-///
-/// This is where the prompt templates for core features can be overridden with templates.
-///
-/// # Arguments
-///
-/// * `dev_mode` - If true, assumes the current working directory is the Zed repository.
-pub fn prompt_overrides_dir(repo_path: Option<&Path>) -> PathBuf {
-    if let Some(path) = repo_path {
-        let dev_path = path.join("assets").join("prompts");
-        if dev_path.exists() {
-            return dev_path;
-        }
-    }
-
-    static PROMPT_TEMPLATES_DIR: OnceLock<PathBuf> = OnceLock::new();
-    PROMPT_TEMPLATES_DIR
-        .get_or_init(|| {
-            if cfg!(target_os = "macos") {
-                config_dir().join("prompt_overrides")
-            } else {
-                data_dir().join("prompt_overrides")
-            }
-        })
-        .clone()
-}
-
-/// Returns the path to the semantic search's embeddings directory.
-///
-/// This is where the embeddings used to power semantic search are stored.
-pub fn embeddings_dir() -> &'static PathBuf {
-    static EMBEDDINGS_DIR: OnceLock<PathBuf> = OnceLock::new();
-    EMBEDDINGS_DIR.get_or_init(|| {
-        if cfg!(target_os = "macos") {
-            config_dir().join("embeddings")
-        } else {
-            data_dir().join("embeddings")
-        }
-    })
-}
-
 /// Returns the path to the languages directory.
 ///
 /// This is where language servers are downloaded to for languages built-in to Zed.
@@ -443,44 +335,10 @@ pub fn languages_dir() -> &'static PathBuf {
     LANGUAGES_DIR.get_or_init(|| data_dir().join("languages"))
 }
 
-/// Returns the path to the debug adapters directory
-///
-/// This is where debug adapters are downloaded to for DAPs that are built-in to Zed.
-pub fn debug_adapters_dir() -> &'static PathBuf {
-    static DEBUG_ADAPTERS_DIR: OnceLock<PathBuf> = OnceLock::new();
-    DEBUG_ADAPTERS_DIR.get_or_init(|| data_dir().join("debug_adapters"))
-}
-
-/// Returns the path to the external agents directory
-///
-/// This is where agent servers are downloaded to
-pub fn external_agents_dir() -> &'static PathBuf {
-    static EXTERNAL_AGENTS_DIR: OnceLock<PathBuf> = OnceLock::new();
-    EXTERNAL_AGENTS_DIR.get_or_init(|| data_dir().join("external_agents"))
-}
-
-/// Returns the path to the Copilot directory.
-pub fn copilot_dir() -> &'static PathBuf {
-    static COPILOT_DIR: OnceLock<PathBuf> = OnceLock::new();
-    COPILOT_DIR.get_or_init(|| data_dir().join("copilot"))
-}
-
 /// Returns the path to the default Prettier directory.
 pub fn default_prettier_dir() -> &'static PathBuf {
     static DEFAULT_PRETTIER_DIR: OnceLock<PathBuf> = OnceLock::new();
     DEFAULT_PRETTIER_DIR.get_or_init(|| data_dir().join("prettier"))
-}
-
-/// Returns the path to the remote server binaries directory.
-pub fn remote_servers_dir() -> &'static PathBuf {
-    static REMOTE_SERVERS_DIR: OnceLock<PathBuf> = OnceLock::new();
-    REMOTE_SERVERS_DIR.get_or_init(|| data_dir().join("remote_servers"))
-}
-
-/// Returns the path to the directory where the devcontainer CLI is installed.
-pub fn devcontainer_dir() -> &'static PathBuf {
-    static DEVCONTAINER_DIR: OnceLock<PathBuf> = OnceLock::new();
-    DEVCONTAINER_DIR.get_or_init(|| data_dir().join("devcontainer"))
 }
 
 /// Returns the relative path to a `.zed` folder within a project.

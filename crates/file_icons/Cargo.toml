@@ -12,6 +12,10 @@ workspace = true
 path = "src/file_icons.rs"
 doctest = false
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 gpui.workspace = true
 serde.workspace = true

@@ -23,4 +23,6 @@ theme.workspace = true
 documented.workspace = true
 
 [features]
+lite = []
+test-support = []
 default = []

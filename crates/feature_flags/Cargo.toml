@@ -11,6 +11,10 @@ workspace = true
 [lib]
 path = "src/feature_flags.rs"
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 collections.workspace = true
 feature_flags_macros.workspace = true

@@ -14,7 +14,6 @@ use parking_lot::Mutex;
 use std::{
     collections::{BTreeMap, BTreeSet},
     env,
-    ffi::OsStr,
     fs, io,
     path::{Path, PathBuf},
     process::ExitStatus,
@@ -27,7 +26,7 @@ use walkdir::WalkDir;
 
 use std::io::IsTerminal;
 
-const URL_PREFIX: [&'static str; 5] = ["zed://", "http://", "https://", "file://", "ssh://"];
+const URL_PREFIX: [&'static str; 4] = ["zed://", "http://", "https://", "file://"];
 
 struct Detect;
 
@@ -104,31 +103,10 @@ struct Args {
     /// Custom path to Zed.app or the zed binary
     #[arg(long)]
     zed: Option<PathBuf>,
-    /// Run zed in dev-server mode
-    #[arg(long)]
-    dev_server_token: Option<String>,
-    /// The username and WSL distribution to use when opening paths. If not specified,
-    /// Zed will attempt to open the paths directly.
-    ///
-    /// The username is optional, and if not specified, the default user for the distribution
-    /// will be used.
-    ///
-    /// Example: `me@Ubuntu` or `Ubuntu`.
-    ///
-    /// WARN: You should not fill in this field by hand.
-    #[cfg(target_os = "windows")]
-    #[arg(long, value_name = "USER@DISTRO")]
-    wsl: Option<String>,
     /// Not supported in Zed CLI, only supported on Zed binary
     /// Will attempt to give the correct command to run
     #[arg(long)]
     system_specs: bool,
-    /// Open the project in a dev container.
-    ///
-    /// Automatically triggers "Reopen in Dev Container" if a `.devcontainer/`
-    /// configuration is found in the project directory.
-    #[arg(long)]
-    dev_container: bool,
     /// Pairs of file paths to diff. Can be specified multiple times.
     /// When directories are provided, recurses into them and shows all changed files in a single multi-diff view.
     #[arg(long, action = clap::ArgAction::Append, num_args = 2, value_names = ["OLD_PATH", "NEW_PATH"])]
@@ -414,51 +392,6 @@ mod tests {
     }
 }
 
-fn parse_path_in_wsl(source: &str, wsl: &str) -> Result<String> {
-    let mut source = PathWithPosition::parse_str(source);
-
-    let (user, distro_name) = if let Some((user, distro)) = wsl.split_once('@') {
-        if user.is_empty() {
-            anyhow::bail!("user is empty in wsl argument");
-        }
-        (Some(user), distro)
-    } else {
-        (None, wsl)
-    };
-
-    let mut args = vec!["--distribution", distro_name];
-    if let Some(user) = user {
-        args.push("--user");
-        args.push(user);
-    }
-
-    let command = [
-        OsStr::new("realpath"),
-        OsStr::new("-s"),
-        source.path.as_ref(),
-    ];
-
-    let output = util::command::new_std_command("wsl.exe")
-        .args(&args)
-        .arg("--exec")
-        .args(&command)
-        .output()?;
-    let result = if output.status.success() {
-        String::from_utf8_lossy(&output.stdout).to_string()
-    } else {
-        let fallback = util::command::new_std_command("wsl.exe")
-            .args(&args)
-            .arg("--")
-            .args(&command)
-            .output()?;
-        String::from_utf8_lossy(&fallback.stdout).to_string()
-    };
-
-    source.path = Path::new(result.trim()).to_owned();
-
-    Ok(source.to_string(&|path| path.to_string_lossy().into_owned()))
-}
-
 fn main() {
     if let Err(error) = run() {
         eprintln!("error: {error:#}");
@@ -477,16 +410,6 @@ fn run() -> Result<()> {
         flatpak::ld_extra_libs();
     }
 
-    // Intercept version designators
-    #[cfg(target_os = "macos")]
-    if let Some(channel) = std::env::args().nth(1).filter(|arg| arg.starts_with("--")) {
-        // When the first argument is a name of a release channel, we're going to spawn off the CLI of that version, with trailing args passed along.
-        use std::str::FromStr as _;
-
-        if let Ok(channel) = release_channel::ReleaseChannel::from_str(&channel[2..]) {
-            return mac_os::spawn_channel_cli(channel, std::env::args().skip(2).collect());
-        }
-    }
     let args = Args::parse();
 
     // `zed --askpass` Makes zed operate in nc/netcat mode for use with askpass
@@ -537,7 +460,6 @@ fn run() -> Result<()> {
 
         let status = std::process::Command::new("sh")
             .arg(&script_path)
-            .env("ZED_CHANNEL", &*release_channel::RELEASE_CHANNEL_NAME)
             .status()
             .context("Failed to execute uninstall script")?;
 
@@ -629,11 +551,6 @@ fn run() -> Result<()> {
         let _ = temp_dir.keep();
     }
 
-    #[cfg(target_os = "windows")]
-    let wsl = args.wsl.as_ref();
-    #[cfg(not(target_os = "windows"))]
-    let wsl = None;
-
     for path in args.paths_with_position.iter() {
         if URL_PREFIX.iter().any(|&prefix| path.starts_with(prefix)) {
             urls.push(path.to_string());
@@ -647,17 +564,10 @@ fn run() -> Result<()> {
             paths.push(tmp_file.path().to_string_lossy().into_owned());
             let (tmp_file, _) = tmp_file.keep()?;
             anonymous_fd_tmp_files.push((file, tmp_file));
-        } else if let Some(wsl) = wsl {
-            urls.push(format!("file://{}", parse_path_in_wsl(path, wsl)?));
         } else {
             paths.push(parse_path_with_position(path)?);
         }
     }
-
-    anyhow::ensure!(
-        args.dev_server_token.is_none(),
-        "Dev servers were removed in v0.157.x please upgrade to SSH remoting: https://zed.dev/docs/remote-development"
-    );
 
     rayon::ThreadPoolBuilder::new()
         .num_threads(4)
@@ -675,22 +585,15 @@ fn run() -> Result<()> {
                 let (_, handshake) = server.accept().context("Handshake after Zed spawn")?;
                 let (tx, rx) = (handshake.requests, handshake.responses);
 
-                #[cfg(target_os = "windows")]
-                let wsl = args.wsl;
-                #[cfg(not(target_os = "windows"))]
-                let wsl = None;
-
                 let open_request = CliRequest::Open {
                     paths,
                     urls,
                     diff_paths,
                     diff_all: diff_all_mode,
-                    wsl,
                     wait: args.wait,
                     open_behavior,
                     env,
                     user_data_dir: user_data_dir_for_thread,
-                    dev_container: args.dev_container,
                     cwd: env::current_dir().ok(),
                 };
 
@@ -888,12 +791,7 @@ mod linux {
     impl InstalledApp for App {
         fn zed_version_string(&self) -> String {
             format!(
-                "Zed {}{}{} – {}",
-                if *release_channel::RELEASE_CHANNEL_NAME == "stable" {
-                    "".to_string()
-                } else {
-                    format!("{} ", *release_channel::RELEASE_CHANNEL_NAME)
-                },
+                "Zed Lite {}{} – {}",
                 option_env!("RELEASE_VERSION").unwrap_or_default(),
                 match option_env!("ZED_COMMIT_SHA") {
                     Some(commit_sha) => format!(" {commit_sha} "),
@@ -908,10 +806,7 @@ mod linux {
                 .map(PathBuf::from)
                 .unwrap_or_else(|| paths::data_dir().clone());
 
-            let sock_path = data_dir.join(format!(
-                "zed-{}.sock",
-                *release_channel::RELEASE_CHANNEL_NAME
-            ));
+            let sock_path = data_dir.join("zed-lite.sock");
             let sock = UnixDatagram::unbound()?;
             if sock.connect(&sock_path).is_err() {
                 self.boot_background(ipc_url, user_data_dir)?;
@@ -1135,12 +1030,7 @@ mod windows {
     impl InstalledApp for App {
         fn zed_version_string(&self) -> String {
             format!(
-                "Zed {}{}{} – {}",
-                if *release_channel::RELEASE_CHANNEL_NAME == "stable" {
-                    "".to_string()
-                } else {
-                    format!("{} ", *release_channel::RELEASE_CHANNEL_NAME)
-                },
+                "Zed Lite {}{} – {}",
                 option_env!("RELEASE_VERSION").unwrap_or_default(),
                 match option_env!("ZED_COMMIT_SHA") {
                     Some(commit_sha) => format!(" {commit_sha} "),
@@ -1421,29 +1311,4 @@ mod mac_os {
         }
     }
 
-    pub(super) fn spawn_channel_cli(
-        channel: release_channel::ReleaseChannel,
-        leftover_args: Vec<String>,
-    ) -> Result<()> {
-        use anyhow::bail;
-
-        let app_path_prompt = format!(
-            "POSIX path of (path to application \"{}\")",
-            channel.display_name()
-        );
-        let app_path_output = Command::new("osascript")
-            .arg("-e")
-            .arg(&app_path_prompt)
-            .output()?;
-        if !app_path_output.status.success() {
-            bail!(
-                "Could not determine app path for {}",
-                channel.display_name()
-            );
-        }
-        let app_path = String::from_utf8(app_path_output.stdout)?.trim().to_owned();
-        let cli_path = format!("{app_path}/Contents/MacOS/cli");
-        Command::new(cli_path).args(leftover_args).spawn()?;
-        Ok(())
-    }
 }

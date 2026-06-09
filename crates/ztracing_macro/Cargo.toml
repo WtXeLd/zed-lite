@@ -8,4 +8,8 @@ license = "GPL-3.0-or-later"
 [lib]
 proc-macro = true
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]

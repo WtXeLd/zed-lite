@@ -8,7 +8,7 @@
 #
 ## Running this script:
 # 1. It only works on Macos/Linux
-# Open a new Julia repl with `julia` inside the `zed` repo
+# Open a new Julia shell with `julia` inside the `zed` repo
 # 2. Paste the following code
 # 3. Whenever you close your computer, just type the Up arrow on the REPL + enter to rerun the loop again to resume
 function get_issues()

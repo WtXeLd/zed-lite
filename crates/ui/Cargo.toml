@@ -41,4 +41,6 @@ gpui = { workspace = true, features = ["test-support"] }
 ignored = ["log"]
 
 [features]
+lite = []
+test-support = []
 default = []

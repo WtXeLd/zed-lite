@@ -13,6 +13,7 @@ path = "src/picker.rs"
 doctest = false
 
 [features]
+lite = []
 test-support = []
 
 [dependencies]

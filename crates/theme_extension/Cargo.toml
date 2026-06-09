@@ -11,6 +11,10 @@ workspace = true
 [lib]
 path = "src/theme_extension.rs"
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 anyhow.workspace = true
 extension.workspace = true

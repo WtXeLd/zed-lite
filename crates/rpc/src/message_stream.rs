@@ -2,7 +2,7 @@
 
 pub use ::proto::*;
 
-use async_tungstenite::tungstenite::Message as WebSocketMessage;
+use crate::conn::WireMessage;
 use futures::{SinkExt as _, StreamExt as _};
 use proto::Message as _;
 use std::time::Instant;
@@ -36,7 +36,7 @@ impl<S> MessageStream<S> {
 
 impl<S> MessageStream<S>
 where
-    S: futures::Sink<WebSocketMessage, Error = anyhow::Error> + Unpin,
+    S: futures::Sink<WireMessage, Error = anyhow::Error> + Unpin,
 {
     pub async fn write(&mut self, message: Message) -> anyhow::Result<()> {
         #[cfg(any(test, feature = "test-support"))]
@@ -58,18 +58,14 @@ where
                 self.encoding_buffer.clear();
                 self.encoding_buffer.shrink_to(MAX_BUFFER_LEN);
                 self.stream
-                    .send(WebSocketMessage::Binary(buffer.into()))
+                    .send(WireMessage::Binary(buffer))
                     .await?;
             }
             Message::Ping => {
-                self.stream
-                    .send(WebSocketMessage::Ping(Default::default()))
-                    .await?;
+                self.stream.send(WireMessage::Ping(Vec::new())).await?;
             }
             Message::Pong => {
-                self.stream
-                    .send(WebSocketMessage::Pong(Default::default()))
-                    .await?;
+                self.stream.send(WireMessage::Pong(Vec::new())).await?;
             }
         }
 
@@ -79,15 +75,15 @@ where
 
 impl<S> MessageStream<S>
 where
-    S: futures::Stream<Item = anyhow::Result<WebSocketMessage>> + Unpin,
+    S: futures::Stream<Item = anyhow::Result<WireMessage>> + Unpin,
 {
     pub async fn read(&mut self) -> anyhow::Result<(Message, Instant)> {
         while let Some(bytes) = self.stream.next().await {
             let received_at = Instant::now();
             match bytes? {
-                WebSocketMessage::Binary(bytes) => {
+                WireMessage::Binary(bytes) => {
                     zstd::stream::copy_decode(
-                        zstd::zstd_safe::WriteBuf::as_slice(&*bytes),
+                        zstd::zstd_safe::WriteBuf::as_slice(&bytes),
                         &mut self.encoding_buffer,
                     )?;
                     let envelope = Envelope::decode(self.encoding_buffer.as_slice())
@@ -97,9 +93,9 @@ where
                     self.encoding_buffer.shrink_to(MAX_BUFFER_LEN);
                     return Ok((Message::Envelope(envelope), received_at));
                 }
-                WebSocketMessage::Ping(_) => return Ok((Message::Ping, received_at)),
-                WebSocketMessage::Pong(_) => return Ok((Message::Pong, received_at)),
-                WebSocketMessage::Close(_) => break,
+                WireMessage::Ping(_) => return Ok((Message::Ping, received_at)),
+                WireMessage::Pong(_) => return Ok((Message::Pong, received_at)),
+                WireMessage::Close => break,
                 _ => {}
             }
         }

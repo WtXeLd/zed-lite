@@ -4,16 +4,38 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Context as _, Result, anyhow, bail};
-use cloud_api_types::ExtensionProvides;
 use collections::{BTreeMap, BTreeSet, HashMap};
 use fs::Fs;
 use language::LanguageName;
 use lsp::LanguageServerName;
 use semver::Version;
 use serde::{Deserialize, Serialize};
-use util::rel_path::{PathExt, RelPathBuf};
+use util::rel_path::RelPathBuf;
 
 use crate::ExtensionCapability;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+pub enum ExtensionProvides {
+    Themes,
+    IconThemes,
+    Languages,
+    Grammars,
+    LanguageServers,
+    Snippets,
+}
+
+impl fmt::Display for ExtensionProvides {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Themes => f.write_str("themes"),
+            Self::IconThemes => f.write_str("icon_themes"),
+            Self::Languages => f.write_str("languages"),
+            Self::Grammars => f.write_str("grammars"),
+            Self::LanguageServers => f.write_str("language_servers"),
+            Self::Snippets => f.write_str("snippets"),
+        }
+    }
+}
 
 /// This is the old version of the extension manifest, from when it was `extension.json`.
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
@@ -105,19 +127,11 @@ pub struct ExtensionManifest {
     #[serde(default)]
     pub language_servers: BTreeMap<LanguageServerName, LanguageServerManifestEntry>,
     #[serde(default)]
-    pub context_servers: BTreeMap<Arc<str>, ContextServerManifestEntry>,
-    #[serde(default)]
     pub slash_commands: BTreeMap<Arc<str>, SlashCommandManifestEntry>,
     #[serde(default)]
     pub snippets: Option<ExtensionSnippets>,
     #[serde(default)]
     pub capabilities: Vec<ExtensionCapability>,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub debug_adapters: BTreeMap<Arc<str>, DebugAdapterManifestEntry>,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub debug_locators: BTreeMap<Arc<str>, DebugLocatorManifestEntry>,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub language_model_providers: BTreeMap<Arc<str>, LanguageModelProviderManifestEntry>,
 }
 
 impl ExtensionManifest {
@@ -144,16 +158,8 @@ impl ExtensionManifest {
             provides.insert(ExtensionProvides::LanguageServers);
         }
 
-        if !self.context_servers.is_empty() {
-            provides.insert(ExtensionProvides::ContextServers);
-        }
-
         if self.snippets.is_some() {
             provides.insert(ExtensionProvides::Snippets);
-        }
-
-        if !self.debug_adapters.is_empty() {
-            provides.insert(ExtensionProvides::DebugAdapters);
         }
 
         provides
@@ -182,20 +188,6 @@ impl ExtensionManifest {
 
     pub fn allow_remote_load(&self) -> bool {
         !self.language_servers.is_empty()
-            || !self.debug_adapters.is_empty()
-            || !self.debug_locators.is_empty()
-    }
-}
-
-pub fn build_debug_adapter_schema_path(
-    adapter_name: &Arc<str>,
-    meta: &DebugAdapterManifestEntry,
-) -> anyhow::Result<RelPathBuf> {
-    match &meta.schema_path {
-        Some(path) => Ok(path.clone()),
-        None => Path::new("debug_adapter_schemas")
-            .join(Path::new(adapter_name.as_ref()).with_extension("json"))
-            .to_rel_path_buf(),
     }
 }
 
@@ -205,90 +197,6 @@ pub struct LibManifestEntry {
     pub version: Option<Version>,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
-pub struct AgentServerManifestEntry {
-    /// Display name for the agent (shown in menus).
-    pub name: String,
-    /// Environment variables to set when launching the agent server.
-    #[serde(default)]
-    pub env: HashMap<String, String>,
-    /// Optional icon path (relative to extension root, e.g., "ai.svg").
-    /// Should be a small SVG icon for display in menus.
-    #[serde(default)]
-    pub icon: Option<String>,
-    /// Per-target configuration for archive-based installation.
-    /// The key format is "{os}-{arch}" where:
-    /// - os: "darwin" (macOS), "linux", "windows"
-    /// - arch: "aarch64" (arm64), "x86_64"
-    ///
-    /// Example:
-    /// ```toml
-    /// [agent_servers.myagent.targets.darwin-aarch64]
-    /// archive = "https://example.com/myagent-darwin-arm64.zip"
-    /// cmd = "./myagent"
-    /// args = ["--serve"]
-    /// sha256 = "abc123..."  # optional
-    /// ```
-    ///
-    /// For Node.js-based agents, you can use "node" as the cmd to automatically
-    /// use Zed's managed Node.js runtime instead of relying on the user's PATH:
-    /// ```toml
-    /// [agent_servers.nodeagent.targets.darwin-aarch64]
-    /// archive = "https://example.com/nodeagent.zip"
-    /// cmd = "node"
-    /// args = ["index.js", "--port", "3000"]
-    /// ```
-    ///
-    /// Note: All commands are executed with the archive extraction directory as the
-    /// working directory, so relative paths in args (like "index.js") will resolve
-    /// relative to the extracted archive contents.
-    pub targets: HashMap<String, TargetConfig>,
-}
-
-#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
-pub struct TargetConfig {
-    /// URL to download the archive from (e.g., "https://github.com/owner/repo/releases/download/v1.0.0/myagent-darwin-arm64.zip")
-    pub archive: String,
-    /// Command to run (e.g., "./myagent" or "./myagent.exe")
-    pub cmd: String,
-    /// Command-line arguments to pass to the agent server.
-    #[serde(default)]
-    pub args: Vec<String>,
-    /// Optional SHA-256 hash of the archive for verification.
-    /// If not provided and the URL is a GitHub release, we'll attempt to fetch it from GitHub.
-    #[serde(default)]
-    pub sha256: Option<String>,
-    /// Environment variables to set when launching the agent server.
-    /// These target-specific env vars will override any env vars set at the agent level.
-    #[serde(default)]
-    pub env: HashMap<String, String>,
-}
-
-impl TargetConfig {
-    pub fn from_proto(proto: proto::ExternalExtensionAgentTarget) -> Self {
-        Self {
-            archive: proto.archive,
-            cmd: proto.cmd,
-            args: proto.args,
-            sha256: proto.sha256,
-            env: proto.env.into_iter().collect(),
-        }
-    }
-
-    pub fn to_proto(&self) -> proto::ExternalExtensionAgentTarget {
-        proto::ExternalExtensionAgentTarget {
-            archive: self.archive.clone(),
-            cmd: self.cmd.clone(),
-            args: self.args.clone(),
-            sha256: self.sha256.clone(),
-            env: self
-                .env
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect(),
-        }
-    }
-}
 
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
 pub enum ExtensionLibraryKind {
@@ -337,30 +245,9 @@ impl LanguageServerManifestEntry {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
-pub struct ContextServerManifestEntry {}
-
-#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
 pub struct SlashCommandManifestEntry {
     pub description: String,
     pub requires_argument: bool,
-}
-
-#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
-pub struct DebugAdapterManifestEntry {
-    pub schema_path: Option<RelPathBuf>,
-}
-
-#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
-pub struct DebugLocatorManifestEntry {}
-
-/// Manifest entry for a language model provider.
-#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
-pub struct LanguageModelProviderManifestEntry {
-    /// Display name for the provider.
-    pub name: String,
-    /// Path to an SVG icon file relative to the extension root (e.g., "icons/provider.svg").
-    #[serde(default)]
-    pub icon: Option<String>,
 }
 
 impl ExtensionManifest {
@@ -426,13 +313,9 @@ fn manifest_from_old_manifest(
             .map(|grammar_name| (grammar_name, Default::default()))
             .collect(),
         language_servers: Default::default(),
-        context_servers: BTreeMap::default(),
         slash_commands: BTreeMap::default(),
         snippets: None,
         capabilities: Vec::new(),
-        debug_adapters: Default::default(),
-        debug_locators: Default::default(),
-        language_model_providers: Default::default(),
     }
 }
 
@@ -460,34 +343,10 @@ mod tests {
             languages: vec![],
             grammars: BTreeMap::default(),
             language_servers: BTreeMap::default(),
-            context_servers: BTreeMap::default(),
             slash_commands: BTreeMap::default(),
             snippets: None,
             capabilities: vec![],
-            debug_adapters: Default::default(),
-            debug_locators: Default::default(),
-            language_model_providers: BTreeMap::default(),
         }
-    }
-
-    #[test]
-    fn test_build_adapter_schema_path_with_schema_path() {
-        let adapter_name = Arc::from("my_adapter");
-        let entry = DebugAdapterManifestEntry {
-            schema_path: Some(rel_path_buf("foo/bar")),
-        };
-
-        let path = build_debug_adapter_schema_path(&adapter_name, &entry).unwrap();
-        assert_eq!(path, rel_path_buf("foo/bar"));
-    }
-
-    #[test]
-    fn test_build_adapter_schema_path_without_schema_path() {
-        let adapter_name = Arc::from("my_adapter");
-        let entry = DebugAdapterManifestEntry { schema_path: None };
-
-        let path = build_debug_adapter_schema_path(&adapter_name, &entry).unwrap();
-        assert_eq!(path, rel_path_buf("debug_adapter_schemas/my_adapter.json"));
     }
 
     #[test]

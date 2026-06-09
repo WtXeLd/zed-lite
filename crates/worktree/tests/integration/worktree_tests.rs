@@ -4826,8 +4826,6 @@ async fn test_remote_worktree_without_git_emits_root_repo_event_after_first_upda
                 removed_entries: vec![],
                 scan_id: 1,
                 is_last_update: true,
-                updated_repositories: vec![],
-                removed_repositories: vec![],
                 root_repo_common_dir: None,
             });
     });
@@ -4918,8 +4916,6 @@ async fn test_remote_worktree_with_git_emits_root_repo_event_when_repo_info_arri
                 removed_entries: vec![],
                 scan_id: 1,
                 is_last_update: true,
-                updated_repositories: vec![],
-                removed_repositories: vec![],
                 root_repo_common_dir: Some("/home/user/project/.git".to_string()),
             });
     });

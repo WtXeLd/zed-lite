@@ -11,6 +11,10 @@ workspace = true
 [lib]
 path = "src/telemetry_events.rs"
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 semver.workspace = true
 serde.workspace = true

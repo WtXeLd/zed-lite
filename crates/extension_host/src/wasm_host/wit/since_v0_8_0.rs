@@ -1,4 +1,3 @@
-use crate::wasm_host::wit::since_v0_6_0::slash_command::SlashCommandOutputSection;
 use crate::wasm_host::wit::{CompletionKind, CompletionLabelDetails, InsertTextFormat, SymbolKind};
 use crate::wasm_host::{WasmState, wit::ToWasmtimeResult};
 use ::http_client::{AsyncBody, HttpRequestExt};
@@ -12,18 +11,15 @@ use extension::{
 };
 use futures::{AsyncReadExt, lock::Mutex};
 use futures::{FutureExt as _, io::BufReader};
-use gpui::{BackgroundExecutor, SharedString};
+use gpui::BackgroundExecutor;
 use language::{BinaryStatus, LanguageName, language_settings::AllLanguageSettings};
 use project::project_settings::ProjectSettings;
 use semver::Version;
 use std::{
     env,
-    net::{IpAddr, Ipv4Addr, Ipv6Addr},
     path::{Path, PathBuf},
-    str::FromStr,
     sync::{Arc, OnceLock},
 };
-use task::{SpawnInTerminal, ZedDebugConfig};
 use url::Url;
 use util::{
     archive::extract_zip, fs::make_file_executable, maybe, paths::PathStyle, rel_path::RelPath,
@@ -85,270 +81,6 @@ impl From<Command> for extension::Command {
             args: value.args,
             env: value.env,
         }
-    }
-}
-
-impl From<StartDebuggingRequestArgumentsRequest>
-    for extension::StartDebuggingRequestArgumentsRequest
-{
-    fn from(value: StartDebuggingRequestArgumentsRequest) -> Self {
-        match value {
-            StartDebuggingRequestArgumentsRequest::Launch => Self::Launch,
-            StartDebuggingRequestArgumentsRequest::Attach => Self::Attach,
-        }
-    }
-}
-impl TryFrom<dap::StartDebuggingRequestArguments> for extension::StartDebuggingRequestArguments {
-    type Error = anyhow::Error;
-
-    fn try_from(value: dap::StartDebuggingRequestArguments) -> Result<Self, Self::Error> {
-        Ok(Self {
-            configuration: serde_json::from_str(&value.configuration)?,
-            request: value.request.into(),
-        })
-    }
-}
-impl From<dap::IpAddress> for IpAddr {
-    fn from(value: dap::IpAddress) -> Self {
-        match value {
-            dap::IpAddress::Ipv4((a, b, c, d)) => IpAddr::V4(Ipv4Addr::new(a, b, c, d)),
-            dap::IpAddress::Ipv6((a, b, c, d, e, f, g, h)) => {
-                IpAddr::V6(Ipv6Addr::new(a, b, c, d, e, f, g, h))
-            }
-        }
-    }
-}
-
-impl From<IpAddr> for dap::IpAddress {
-    fn from(value: IpAddr) -> Self {
-        match value {
-            IpAddr::V4(v4) => {
-                let [a, b, c, d] = v4.octets();
-                Self::Ipv4((a, b, c, d))
-            }
-            IpAddr::V6(v6) => {
-                let [a, b, c, d, e, f, g, h] = v6.segments();
-                Self::Ipv6((a, b, c, d, e, f, g, h))
-            }
-        }
-    }
-}
-
-impl From<dap::TcpArguments> for extension::TcpArguments {
-    fn from(value: dap::TcpArguments) -> Self {
-        Self {
-            host: value.host.into(),
-            port: value.port,
-            timeout: value.timeout,
-        }
-    }
-}
-
-impl From<extension::TcpArgumentsTemplate> for dap::TcpArgumentsTemplate {
-    fn from(value: extension::TcpArgumentsTemplate) -> Self {
-        Self {
-            host: value.host.map(Into::into),
-            port: value.port,
-            timeout: value.timeout,
-        }
-    }
-}
-
-impl From<dap::TcpArgumentsTemplate> for extension::TcpArgumentsTemplate {
-    fn from(value: dap::TcpArgumentsTemplate) -> Self {
-        Self {
-            host: value.host.map(Into::into),
-            port: value.port,
-            timeout: value.timeout,
-        }
-    }
-}
-
-impl TryFrom<extension::DebugTaskDefinition> for DebugTaskDefinition {
-    type Error = anyhow::Error;
-    fn try_from(value: extension::DebugTaskDefinition) -> Result<Self, Self::Error> {
-        Ok(Self {
-            label: value.label.to_string(),
-            adapter: value.adapter.to_string(),
-            config: value.config.to_string(),
-            tcp_connection: value.tcp_connection.map(Into::into),
-        })
-    }
-}
-
-impl From<task::DebugRequest> for DebugRequest {
-    fn from(value: task::DebugRequest) -> Self {
-        match value {
-            task::DebugRequest::Launch(launch_request) => Self::Launch(launch_request.into()),
-            task::DebugRequest::Attach(attach_request) => Self::Attach(attach_request.into()),
-        }
-    }
-}
-
-impl From<DebugRequest> for task::DebugRequest {
-    fn from(value: DebugRequest) -> Self {
-        match value {
-            DebugRequest::Launch(launch_request) => Self::Launch(launch_request.into()),
-            DebugRequest::Attach(attach_request) => Self::Attach(attach_request.into()),
-        }
-    }
-}
-
-impl From<task::LaunchRequest> for LaunchRequest {
-    fn from(value: task::LaunchRequest) -> Self {
-        Self {
-            program: value.program,
-            cwd: value.cwd.map(|p| p.to_string_lossy().into_owned()),
-            args: value.args,
-            envs: value.env.into_iter().collect(),
-        }
-    }
-}
-
-impl From<task::AttachRequest> for AttachRequest {
-    fn from(value: task::AttachRequest) -> Self {
-        Self {
-            process_id: value.process_id,
-        }
-    }
-}
-
-impl From<LaunchRequest> for task::LaunchRequest {
-    fn from(value: LaunchRequest) -> Self {
-        Self {
-            program: value.program,
-            cwd: value.cwd.map(|p| p.into()),
-            args: value.args,
-            env: value.envs.into_iter().collect(),
-        }
-    }
-}
-impl From<AttachRequest> for task::AttachRequest {
-    fn from(value: AttachRequest) -> Self {
-        Self {
-            process_id: value.process_id,
-        }
-    }
-}
-
-impl From<ZedDebugConfig> for DebugConfig {
-    fn from(value: ZedDebugConfig) -> Self {
-        Self {
-            label: value.label.into(),
-            adapter: value.adapter.into(),
-            request: value.request.into(),
-            stop_on_entry: value.stop_on_entry,
-        }
-    }
-}
-impl TryFrom<DebugAdapterBinary> for extension::DebugAdapterBinary {
-    type Error = anyhow::Error;
-    fn try_from(value: DebugAdapterBinary) -> Result<Self, Self::Error> {
-        Ok(Self {
-            command: value.command,
-            arguments: value.arguments,
-            envs: value.envs.into_iter().collect(),
-            cwd: value.cwd.map(|s| s.into()),
-            connection: value.connection.map(Into::into),
-            request_args: value.request_args.try_into()?,
-        })
-    }
-}
-
-impl From<dap::BuildTaskDefinition> for extension::BuildTaskDefinition {
-    fn from(value: dap::BuildTaskDefinition) -> Self {
-        match value {
-            dap::BuildTaskDefinition::ByName(name) => Self::ByName(name.into()),
-            dap::BuildTaskDefinition::Template(build_task_template) => Self::Template {
-                task_template: build_task_template.template.into(),
-                locator_name: build_task_template.locator_name.map(SharedString::from),
-            },
-        }
-    }
-}
-
-impl From<extension::BuildTaskDefinition> for dap::BuildTaskDefinition {
-    fn from(value: extension::BuildTaskDefinition) -> Self {
-        match value {
-            extension::BuildTaskDefinition::ByName(name) => Self::ByName(name.into()),
-            extension::BuildTaskDefinition::Template {
-                task_template,
-                locator_name,
-            } => Self::Template(dap::BuildTaskDefinitionTemplatePayload {
-                template: task_template.into(),
-                locator_name: locator_name.map(String::from),
-            }),
-        }
-    }
-}
-impl From<BuildTaskTemplate> for extension::BuildTaskTemplate {
-    fn from(value: BuildTaskTemplate) -> Self {
-        Self {
-            label: value.label,
-            command: value.command,
-            args: value.args,
-            env: value.env.into_iter().collect(),
-            cwd: value.cwd,
-            ..Default::default()
-        }
-    }
-}
-impl From<extension::BuildTaskTemplate> for BuildTaskTemplate {
-    fn from(value: extension::BuildTaskTemplate) -> Self {
-        Self {
-            label: value.label,
-            command: value.command,
-            args: value.args,
-            env: value.env.into_iter().collect(),
-            cwd: value.cwd,
-        }
-    }
-}
-
-impl TryFrom<DebugScenario> for extension::DebugScenario {
-    type Error = anyhow::Error;
-
-    fn try_from(value: DebugScenario) -> std::result::Result<Self, Self::Error> {
-        Ok(Self {
-            adapter: value.adapter.into(),
-            label: value.label.into(),
-            build: value.build.map(Into::into),
-            config: serde_json::Value::from_str(&value.config)?,
-            tcp_connection: value.tcp_connection.map(Into::into),
-        })
-    }
-}
-
-impl From<extension::DebugScenario> for DebugScenario {
-    fn from(value: extension::DebugScenario) -> Self {
-        Self {
-            adapter: value.adapter.into(),
-            label: value.label.into(),
-            build: value.build.map(Into::into),
-            config: value.config.to_string(),
-            tcp_connection: value.tcp_connection.map(Into::into),
-        }
-    }
-}
-
-impl TryFrom<SpawnInTerminal> for ResolvedTask {
-    type Error = anyhow::Error;
-
-    fn try_from(value: SpawnInTerminal) -> Result<Self, Self::Error> {
-        Ok(Self {
-            label: value.label,
-            command: value.command.context("missing command")?,
-            args: value.args,
-            env: value.env.into_iter().collect(),
-            cwd: value.cwd.map(|s| {
-                let s = s.to_string_lossy();
-                if cfg!(target_os = "windows") {
-                    s.replace('\\', "/")
-                } else {
-                    s.into_owned()
-                }
-            }),
-        })
     }
 }
 
@@ -508,8 +240,8 @@ impl From<SlashCommandOutput> for extension::SlashCommandOutput {
     }
 }
 
-impl From<SlashCommandOutputSection> for extension::SlashCommandOutputSection {
-    fn from(value: SlashCommandOutputSection) -> Self {
+impl From<slash_command::SlashCommandOutputSection> for extension::SlashCommandOutputSection {
+    fn from(value: slash_command::SlashCommandOutputSection) -> Self {
         Self {
             range: value.range.start as usize..value.range.end as usize,
             label: value.label,
@@ -524,21 +256,6 @@ impl From<SlashCommandArgumentCompletion> for extension::SlashCommandArgumentCom
             new_text: value.new_text,
             run_command: value.run_command,
         }
-    }
-}
-
-impl TryFrom<ContextServerConfiguration> for extension::ContextServerConfiguration {
-    type Error = anyhow::Error;
-
-    fn try_from(value: ContextServerConfiguration) -> Result<Self, Self::Error> {
-        let settings_schema: serde_json::Value = serde_json::from_str(&value.settings_schema)
-            .context("Failed to parse settings_schema")?;
-
-        Ok(Self {
-            installation_instructions: value.installation_instructions,
-            default_settings: value.default_settings,
-            settings_schema,
-        })
     }
 }
 
@@ -912,33 +629,6 @@ impl process::Host for WasmState {
 #[async_trait]
 impl slash_command::Host for WasmState {}
 
-#[async_trait]
-impl context_server::Host for WasmState {}
-
-impl dap::Host for WasmState {
-    async fn resolve_tcp_template(
-        &mut self,
-        template: dap::TcpArgumentsTemplate,
-    ) -> wasmtime::Result<Result<dap::TcpArguments, String>> {
-        maybe!(async {
-            let (host, port, timeout) =
-                ::dap::configure_tcp_connection(task::TcpArgumentsTemplate {
-                    port: template.port,
-                    host: template.host.map(Into::into),
-                    timeout: template.timeout,
-                })
-                .await?;
-            Ok(dap::TcpArguments {
-                port,
-                host: host.into(),
-                timeout,
-            })
-        })
-        .await
-        .to_wasmtime_result()
-    }
-}
-
 impl ExtensionImports for WasmState {
     async fn get_settings(
         &mut self,
@@ -990,45 +680,6 @@ impl ExtensionImports for WasmState {
                             settings: settings.settings,
                             initialization_options: settings.initialization_options,
                         })?)
-                    }
-                    "context_servers" => {
-                        let settings = key
-                            .and_then(|key| {
-                                ProjectSettings::get(location, cx)
-                                    .context_servers
-                                    .get(key.as_str())
-                            })
-                            .cloned()
-                            .unwrap_or_else(|| {
-                                project::project_settings::ContextServerSettings::default_extension(
-                                )
-                            });
-
-                        match settings {
-                            project::project_settings::ContextServerSettings::Stdio {
-                                enabled: _,
-                                command,
-                                ..
-                            } => Ok(serde_json::to_string(&settings::ContextServerSettings {
-                                command: Some(settings::CommandSettings {
-                                    path: command.path.to_str().map(|path| path.to_string()),
-                                    arguments: Some(command.args),
-                                    env: command.env.map(|env| env.into_iter().collect()),
-                                }),
-                                settings: None,
-                            })?),
-                            project::project_settings::ContextServerSettings::Extension {
-                                enabled: _,
-                                settings,
-                                ..
-                            } => Ok(serde_json::to_string(&settings::ContextServerSettings {
-                                command: None,
-                                settings: Some(settings),
-                            })?),
-                            project::project_settings::ContextServerSettings::Http { .. } => {
-                                bail!("remote context server settings not supported in 0.6.0")
-                            }
-                        }
                     }
                     _ => {
                         bail!("Unknown settings category: {}", category);

@@ -12,6 +12,10 @@ proc-macro = true
 [lints]
 workspace = true
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 proc-macro2.workspace = true
 quote.workspace = true

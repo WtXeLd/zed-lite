@@ -13,6 +13,10 @@ workspace = true
 path = "src/media.rs"
 doctest = false
 
+[features]
+lite = []
+test-support = []
+
 [dependencies]
 anyhow.workspace = true
 

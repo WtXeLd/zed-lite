@@ -15,6 +15,7 @@ path = "src/util.rs"
 doctest = true
 
 [features]
+lite = []
 test-support = ["rand", "util_macros"]
 
 [dependencies]

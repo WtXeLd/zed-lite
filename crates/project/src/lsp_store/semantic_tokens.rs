@@ -18,7 +18,6 @@ use settings::{
 use smol::future::yield_now;
 
 use text::{Anchor, Bias, OffsetUtf16, PointUtf16, Unclipped};
-use util::ResultExt as _;
 
 use crate::{
     LanguageServerToQuery, LspStore, LspStoreEvent,
@@ -217,71 +216,16 @@ impl LspStore {
         for_server: Option<LanguageServerId>,
         cx: &mut Context<Self>,
     ) -> Task<Option<HashMap<LanguageServerId, SemanticTokensResponse>>> {
-        if let Some((client, upstream_project_id)) = self.upstream_client() {
-            let request = SemanticTokensFull { for_server };
-            if !self.is_capable_for_proto_request(buffer, &request, cx) {
-                return Task::ready(None);
-            }
-
-            let request_timeout = ProjectSettings::get_global(cx)
-                .global_lsp_settings
-                .get_request_timeout();
-            let request_task = client.request_lsp(
-                upstream_project_id,
-                None,
-                request_timeout,
-                cx.background_executor().clone(),
-                request.to_proto(upstream_project_id, buffer.read(cx)),
-            );
-            let buffer = buffer.clone();
-            cx.spawn(async move |weak_lsp_store, cx| {
-                let lsp_store = weak_lsp_store.upgrade()?;
-                let tokens = join_all(
-                    request_task
-                        .await
-                        .log_err()
-                        .flatten()
-                        .map(|response| response.payload)
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|response| {
-                            let server_id = LanguageServerId::from_proto(response.server_id);
-                            let response = request.response_from_proto(
-                                response.response,
-                                lsp_store.clone(),
-                                buffer.clone(),
-                                cx.clone(),
-                            );
-                            async move {
-                                match response.await {
-                                    Ok(tokens) => Some((server_id, tokens)),
-                                    Err(e) => {
-                                        log::error!("Failed to query remote semantic tokens for server {server_id:?}: {e:#}");
-                                        None
-                                    }
-                                }
-                            }
-                        }),
-                )
-                .await
-                .into_iter()
-                .flatten()
-                .collect();
-                Some(tokens)
-            })
-        } else {
-            let token_tasks = self
-                .local_lsp_servers_for_buffer(&buffer, cx)
-                .into_iter()
-                .filter(|&server_id| {
-                    for_server.is_none_or(|for_server_id| for_server_id == server_id)
-                })
-                .filter_map(|server_id| {
-                    let capabilities = AdapterServerCapabilities {
-                        server_capabilities: self.lsp_server_capabilities.get(&server_id)?.clone(),
-                        code_action_kinds: None,
-                    };
-                    let request_task = match self.semantic_tokens_result_id(server_id, buffer, cx) {
+        let token_tasks = self
+            .local_lsp_servers_for_buffer(&buffer, cx)
+            .into_iter()
+            .filter(|&server_id| for_server.is_none_or(|for_server_id| for_server_id == server_id))
+            .filter_map(|server_id| {
+                let capabilities = AdapterServerCapabilities {
+                    server_capabilities: self.lsp_server_capabilities.get(&server_id)?.clone(),
+                    code_action_kinds: None,
+                };
+                let request_task = match self.semantic_tokens_result_id(server_id, buffer, cx) {
                         Some(result_id) => {
                             let delta_request = SemanticTokensDelta {
                                 previous_result_id: result_id,
@@ -340,7 +284,9 @@ impl LspStore {
                             match response {
                                 Ok(tokens) => Some((server_id, tokens)),
                                 Err(e) => {
-                                    log::error!("Failed to query remote semantic tokens for server {server_id:?}: {e:#}");
+                            log::error!(
+                                "Failed to query semantic tokens for server {server_id:?}: {e:#}"
+                            );
                                     None
                                 }
                             }
@@ -348,7 +294,6 @@ impl LspStore {
                         .collect()
                 )
             })
-        }
     }
 
     pub(crate) async fn handle_refresh_semantic_tokens(

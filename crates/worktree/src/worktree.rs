@@ -80,7 +80,7 @@ use crate::ignore::IgnoreKind;
 pub const FS_WATCH_LATENCY: Duration = Duration::from_millis(100);
 
 /// A set of local or remote files that are being opened as part of a project.
-/// Responsible for tracking related FS (for local)/collab (for remote) events and corresponding updates.
+/// Responsible for tracking related file system events and corresponding updates.
 /// Stores git repositories data and the diagnostics for the file(s).
 ///
 /// Has an absolute path, and may be set to be visible in Zed UI or not.
@@ -2394,9 +2394,6 @@ impl Snapshot {
             removed_entries: Vec::new(),
             scan_id: self.scan_id as u64,
             is_last_update: self.completed_scan_id == self.scan_id,
-            // Sent in separate messages.
-            updated_repositories: Vec::new(),
-            removed_repositories: Vec::new(),
         }
     }
 
@@ -2776,9 +2773,6 @@ impl LocalSnapshot {
             removed_entries,
             scan_id: self.scan_id as u64,
             is_last_update: self.completed_scan_id == self.scan_id,
-            // Sent in separate messages.
-            updated_repositories: Vec::new(),
-            removed_repositories: Vec::new(),
         }
     }
 

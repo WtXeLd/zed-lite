@@ -7,7 +7,7 @@ use anyhow::Context as _;
 use clock::Global;
 use collections::HashMap;
 use futures::FutureExt as _;
-use futures::future::{Shared, join_all};
+use futures::future::Shared;
 use gpui::{AppContext as _, AsyncApp, Context, Entity, SharedString, Task};
 use language::{Buffer, point_to_lsp};
 use lsp::LanguageServerId;
@@ -17,7 +17,7 @@ use settings::Settings as _;
 use text::{Anchor, BufferId, ToPointUtf16 as _};
 use util::ResultExt as _;
 
-use crate::lsp_command::{GetDocumentLinks, LspCommand as _};
+use crate::lsp_command::GetDocumentLinks;
 use crate::lsp_store::LspStore;
 use crate::project_settings::ProjectSettings;
 
@@ -203,70 +203,9 @@ impl LspStore {
         buffer: &Entity<Buffer>,
         cx: &mut Context<Self>,
     ) -> Task<anyhow::Result<Option<HashMap<LanguageServerId, Vec<LspDocumentLink>>>>> {
-        if let Some((client, project_id)) = self.upstream_client() {
-            let request = GetDocumentLinks;
-            if !self.is_capable_for_proto_request(buffer, &request, cx) {
-                return Task::ready(Ok(None));
-            }
-
-            let request_timeout = ProjectSettings::get_global(cx)
-                .global_lsp_settings
-                .get_request_timeout();
-            let request_task = client.request_lsp(
-                project_id,
-                None,
-                request_timeout,
-                cx.background_executor().clone(),
-                request.to_proto(project_id, buffer.read(cx)),
-            );
-            let buffer = buffer.clone();
-            cx.spawn(async move |weak_lsp_store, cx| {
-                let Some(lsp_store) = weak_lsp_store.upgrade() else {
-                    return Ok(None);
-                };
-                let Some(responses) = request_task.await? else {
-                    return Ok(None);
-                };
-
-                let document_links = join_all(responses.payload.into_iter().map(|response| {
-                    let lsp_store = lsp_store.clone();
-                    let buffer = buffer.clone();
-                    let cx = cx.clone();
-                    async move {
-                        let server_id = LanguageServerId::from_proto(response.server_id);
-                        let links = GetDocumentLinks
-                            .response_from_proto(response.response, lsp_store, buffer, cx)
-                            .await;
-                        (server_id, links)
-                    }
-                }))
-                .await;
-
-                let mut has_errors = false;
-                let result = document_links
-                    .into_iter()
-                    .filter_map(|(server_id, links)| match links {
-                        Ok(links) => Some((server_id, links)),
-                        Err(e) => {
-                            has_errors = true;
-                            log::error!(
-                                "Failed to fetch document links for server {server_id}: {e:#}"
-                            );
-                            None
-                        }
-                    })
-                    .collect::<HashMap<_, _>>();
-                anyhow::ensure!(
-                    !has_errors || !result.is_empty(),
-                    "Failed to fetch document links"
-                );
-                Ok(Some(result))
-            })
-        } else {
-            let links_task =
-                self.request_multiple_lsp_locally(buffer, None::<usize>, GetDocumentLinks, cx);
-            cx.background_spawn(async move { Ok(Some(links_task.await.into_iter().collect())) })
-        }
+        let links_task =
+            self.request_multiple_lsp_locally(buffer, None::<usize>, GetDocumentLinks, cx);
+        cx.background_spawn(async move { Ok(Some(links_task.await.into_iter().collect())) })
     }
 
     /// Returns the resolved state for a cached document link, deduplicating
@@ -351,7 +290,6 @@ impl LspStore {
         cx: &mut Context<Self>,
     ) -> Task<Option<lsp::DocumentLink>> {
         let snapshot = buffer.read(cx).snapshot();
-        let buffer_id = buffer.read(cx).remote_id();
         let lsp_link = lsp::DocumentLink {
             range: lsp::Range {
                 start: point_to_lsp(cached_link.range.start.to_point_utf16(&snapshot)),
@@ -365,38 +303,22 @@ impl LspStore {
             data: cached_link.data.clone(),
         };
 
-        if let Some((upstream_client, project_id)) = self.upstream_client() {
-            if !self.check_if_capable_for_proto_request(buffer, can_resolve_link, cx) {
-                return Task::ready(None);
-            }
-            let request = proto::ResolveDocumentLink {
-                project_id,
-                buffer_id: buffer_id.into(),
-                language_server_id: server_id.0 as u64,
-                lsp_link: serde_json::to_vec(&lsp_link).unwrap_or_default(),
-            };
-            cx.background_spawn(async move {
-                let response = upstream_client.request(request).await.log_err()?;
-                serde_json::from_slice::<lsp::DocumentLink>(&response.lsp_link).log_err()
-            })
-        } else {
-            let Some(server) = self.language_server_for_id(server_id) else {
-                return Task::ready(None);
-            };
-            if !can_resolve_link(&server.capabilities()) {
-                return Task::ready(None);
-            }
-            let request_timeout = ProjectSettings::get_global(cx)
-                .global_lsp_settings
-                .get_request_timeout();
-            cx.background_spawn(async move {
-                server
-                    .request::<DocumentLinkResolve>(lsp_link, request_timeout)
-                    .await
-                    .into_response()
-                    .log_err()
-            })
+        let Some(server) = self.language_server_for_id(server_id) else {
+            return Task::ready(None);
+        };
+        if !can_resolve_link(&server.capabilities()) {
+            return Task::ready(None);
         }
+        let request_timeout = ProjectSettings::get_global(cx)
+            .global_lsp_settings
+            .get_request_timeout();
+        cx.background_spawn(async move {
+            server
+                .request::<DocumentLinkResolve>(lsp_link, request_timeout)
+                .await
+                .into_response()
+                .log_err()
+        })
     }
 
     fn cache_resolved_link(
