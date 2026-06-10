@@ -34,12 +34,16 @@ members = [
     "crates/git_ui",
     "crates/go_to_line",
     "crates/gpui",
+    "crates/gpui_linux",
     "crates/gpui_macos",
     "crates/gpui_macros",
     "crates/gpui_platform",
     "crates/gpui_shared_string",
     "crates/gpui_tokio",
     "crates/gpui_util",
+    "crates/gpui_web",
+    "crates/gpui_wgpu",
+    "crates/gpui_windows",
     "crates/grammars",
     "crates/http_client",
     "crates/http_client_tls",
@@ -192,9 +196,13 @@ go_to_line = { path = "crates/go_to_line" }
 grammars = { path = "crates/grammars" }
 gpui = { path = "crates/gpui", default-features = false }
 gpui_shared_string = { path = "crates/gpui_shared_string" }
+gpui_linux = { path = "crates/gpui_linux", default-features = false }
 gpui_macos = { path = "crates/gpui_macos", default-features = false }
 gpui_macros = { path = "crates/gpui_macros" }
 gpui_platform = { path = "crates/gpui_platform", default-features = false }
+gpui_web = { path = "crates/gpui_web" }
+gpui_wgpu = { path = "crates/gpui_wgpu" }
+gpui_windows = { path = "crates/gpui_windows", default-features = false }
 gpui_tokio = { path = "crates/gpui_tokio" }
 gpui_util = { path = "crates/gpui_util" }
 http_client = { path = "crates/http_client" }
