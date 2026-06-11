@@ -38,6 +38,23 @@ cargo build --no-default-features --features zed/lite,cli/lite --package zed --p
   - `script/bundle-mac`
   - `script/bundle-windows.ps1`
 - GitHub packaging is `.github/workflows/build_lite.yml`.
+- Pushes to `main` build all platform artifacts and upload them to the Actions
+  run only; they do not publish a GitHub Release.
+- Publishing a release requires a `v*` tag, for example:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+- The release job must depend on all platform bundle jobs, download their
+  artifacts, then create/update the matching GitHub Release and upload assets.
+  Keep `actions/checkout` in the release job and pass `--repo
+  "${GITHUB_REPOSITORY}"` to `gh release` commands so the job does not depend on
+  implicit local git state.
+- Rerunning a `main` workflow run will not publish a release because the release
+  job is intentionally skipped outside `v*` tags. To retry a failed release,
+  rerun the tag workflow or move/push the tag to a fixed commit.
 - Do not add release workflows that distinguish dev/nightly/preview/stable.
 - macOS CI may ad-hoc sign when Apple notarization secrets are absent. That is
   acceptable for artifacts unless real notarized distribution is explicitly in
