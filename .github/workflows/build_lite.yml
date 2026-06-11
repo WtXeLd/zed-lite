@@ -13,6 +13,9 @@ env:
   RUST_BACKTRACE: "1"
   CARGO_INCREMENTAL: "0"
 
+permissions:
+  contents: write
+
 jobs:
   bundle_linux_x86_64:
     name: Linux x86_64
@@ -106,3 +109,26 @@ jobs:
           name: zed-lite-windows-x86_64
           path: D:\t\zed-lite-windows-x86_64.zip
           if-no-files-found: error
+
+  publish_release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    needs:
+      - bundle_linux_x86_64
+      - bundle_macos_aarch64
+      - bundle_macos_x86_64
+      - bundle_windows_x86_64
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || \
+            gh release create "${GITHUB_REF_NAME}" --title "Zed Lite ${GITHUB_REF_NAME}" --notes "Zed Lite release ${GITHUB_REF_NAME}"
+          gh release upload "${GITHUB_REF_NAME}" dist/* --clobber
