@@ -120,6 +120,8 @@ jobs:
       - bundle_macos_x86_64
       - bundle_windows_x86_64
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -129,6 +131,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || \
-            gh release create "${GITHUB_REF_NAME}" --title "Zed Lite ${GITHUB_REF_NAME}" --notes "Zed Lite release ${GITHUB_REF_NAME}"
-          gh release upload "${GITHUB_REF_NAME}" dist/* --clobber
+          gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1 || \
+            gh release create "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --title "Zed Lite ${GITHUB_REF_NAME}" --notes "Zed Lite release ${GITHUB_REF_NAME}"
+          gh release upload "${GITHUB_REF_NAME}" dist/* --repo "${GITHUB_REPOSITORY}" --clobber
