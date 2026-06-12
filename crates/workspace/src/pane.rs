@@ -3487,7 +3487,19 @@ impl Pane {
         window: &mut Window,
         cx: &mut Context<Pane>,
     ) -> TabBar {
+        let reserve_window_controls_space = self.workspace.upgrade().is_some_and(|workspace| {
+            workspace.read(cx).should_reserve_window_controls_space_for_pane(&cx.entity(), cx)
+        });
+
         tab_bar
+            .when(reserve_window_controls_space, |tab_bar| {
+                tab_bar.start_child(
+                    div()
+                        .h_full()
+                        .w(px(ui::utils::TRAFFIC_LIGHT_PADDING))
+                        .flex_none(),
+                )
+            })
             .when(
                 self.display_nav_history_buttons.unwrap_or_default(),
                 |tab_bar| {

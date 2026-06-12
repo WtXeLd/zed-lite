@@ -7,9 +7,7 @@ use crate::project_diff::{self, BranchDiff, Diff, ProjectDiff};
 use crate::remote_output::{self, RemoteAction, SuccessMessage};
 use crate::solo_diff_view::SoloDiffView;
 use crate::{branch_picker, picker_prompt, render_remote_button};
-use crate::{
-    git_panel_settings::GitPanelSettings, git_status_icon, repository_selector::RepositorySelector,
-};
+use crate::{git_panel_settings::GitPanelSettings, git_status_icon};
 use anyhow::Context as _;
 use askpass::AskPassDelegate;
 use collections::{BTreeMap, HashMap, HashSet};
@@ -26,7 +24,9 @@ use git::repository::{
     Upstream, UpstreamTracking, UpstreamTrackingStatus,
 };
 use git::stash::GitStash;
-use git::status::{DiffStat, StageStatus};
+use git::status::{
+    DiffStat, StageStatus, StatusCode, TrackedStatus, UnmergedStatus, UnmergedStatusCode,
+};
 use git::{Amend, Commit, Signoff, ToggleStaged, repository::RepoPath, status::FileStatus};
 use git::{
     ExpandCommitEditor, GitHostingProviderRegistry, GitRemote, RestoreTrackedFiles, StageAll,
@@ -34,10 +34,10 @@ use git::{
     parse_git_remote_url,
 };
 use gpui::{
-    AbsoluteLength, Action, Anchor, AsyncWindowContext, Bounds, ClickEvent, DismissEvent,
-    Empty, Entity, EventEmitter, FocusHandle, Focusable, KeyContext, MouseButton, MouseDownEvent,
-    Point, PromptLevel, ScrollStrategy, Subscription, Task, TaskExt, TextStyle,
-    UniformListScrollHandle, WeakEntity, actions, anchored, deferred, point, size, uniform_list,
+    AbsoluteLength, Action, Anchor, AsyncWindowContext, Bounds, ClickEvent, DismissEvent, Empty,
+    Entity, EventEmitter, FocusHandle, Focusable, KeyContext, MouseButton, MouseDownEvent, Point,
+    PromptLevel, ScrollStrategy, Subscription, Task, TaskExt, TextStyle, UniformListScrollHandle,
+    WeakEntity, actions, anchored, deferred, point, size, uniform_list,
 };
 use itertools::Itertools;
 use language::{Buffer, File};
@@ -3956,12 +3956,6 @@ impl GitPanel {
             + gap;
 
         let git_panel = cx.entity();
-        let display_name = SharedString::from(Arc::from(
-            active_repository
-                .read(cx)
-                .display_name()
-                .trim_end_matches("/"),
-        ));
         let editor_is_long = self.commit_editor.update(cx, |editor, cx| {
             editor.max_point(cx).row().0 >= MAX_PANEL_EDITOR_LINES as u32
         });
@@ -3980,12 +3974,7 @@ impl GitPanel {
 
         let footer = v_flex()
             .when(self.commit_editor_expanded, |this| this.flex_1().min_h_0())
-            .child(PanelRepoFooter::new(
-                display_name,
-                branch,
-                head_commit,
-                Some(git_panel),
-            ))
+            .child(PanelRepoFooter::new(branch, head_commit, Some(git_panel)))
             .when(title_exceeds_limit, |this| {
                 this.child(
                     h_flex()
@@ -4043,11 +4032,7 @@ impl GitPanel {
                             .flex_none()
                             .justify_between()
                             .child(div())
-                            .child(
-                                h_flex()
-                                    .gap_0p5()
-                                    .child(self.render_commit_button(cx)),
-                            ),
+                            .child(h_flex().gap_0p5().child(self.render_commit_button(cx))),
                     )
                     .child(
                         div()
@@ -6247,7 +6232,6 @@ impl Render for GitPanelMessageTooltip {
 
 #[derive(IntoElement, RegisterComponent)]
 pub struct PanelRepoFooter {
-    active_repository: SharedString,
     branch: Option<Branch>,
     head_commit: Option<CommitDetails>,
 
@@ -6259,27 +6243,53 @@ pub struct PanelRepoFooter {
 
 impl PanelRepoFooter {
     pub fn new(
-        active_repository: SharedString,
         branch: Option<Branch>,
         head_commit: Option<CommitDetails>,
         git_panel: Option<Entity<GitPanel>>,
     ) -> Self {
         Self {
-            active_repository,
             branch,
             head_commit,
             git_panel,
         }
     }
 
-    pub fn new_preview(active_repository: SharedString, branch: Option<Branch>) -> Self {
+    pub fn new_preview(branch: Option<Branch>) -> Self {
         Self {
-            active_repository,
             branch,
             head_commit: None,
             git_panel: None,
         }
     }
+}
+
+fn repository_status_marker_status(repo: &Repository) -> Option<FileStatus> {
+    let summary = repo.status_summary();
+    if summary.count == 0 {
+        return None;
+    }
+
+    Some(if summary.conflict > 0 {
+        FileStatus::Unmerged(UnmergedStatus {
+            first_head: UnmergedStatusCode::Updated,
+            second_head: UnmergedStatusCode::Updated,
+        })
+    } else if summary.worktree.deleted > 0 || summary.index.deleted > 0 {
+        FileStatus::Tracked(TrackedStatus {
+            index_status: StatusCode::Deleted,
+            worktree_status: StatusCode::Unmodified,
+        })
+    } else if summary.worktree.modified > 0 || summary.index.modified > 0 {
+        FileStatus::Tracked(TrackedStatus {
+            index_status: StatusCode::Modified,
+            worktree_status: StatusCode::Unmodified,
+        })
+    } else {
+        FileStatus::Tracked(TrackedStatus {
+            index_status: StatusCode::Added,
+            worktree_status: StatusCode::Unmodified,
+        })
+    })
 }
 
 impl RenderOnce for PanelRepoFooter {
@@ -6298,10 +6308,27 @@ impl RenderOnce for PanelRepoFooter {
             })
             .unzip();
 
-        let single_repo = project
+        let active_repo = repo.clone().flatten();
+
+        let repositories = project
             .as_ref()
-            .map(|project| project.read(cx).git_store().read(cx).repositories().len() == 1)
-            .unwrap_or(true);
+            .map(|project| {
+                let git_store = project.read(cx).git_store().clone();
+                let mut repositories: Vec<_> = git_store
+                    .read(cx)
+                    .repositories()
+                    .values()
+                    .cloned()
+                    .collect();
+                repositories.sort_by(|a, b| {
+                    a.read(cx)
+                        .display_name()
+                        .to_lowercase()
+                        .cmp(&b.read(cx).display_name().to_lowercase())
+                });
+                repositories
+            })
+            .unwrap_or_default();
 
         const MAX_SHORT_SHA_LEN: usize = 8;
         let branch_name = self
@@ -6318,37 +6345,6 @@ impl RenderOnce for PanelRepoFooter {
                 })
             })
             .unwrap_or_else(|| " (no branch)".to_owned());
-        let show_separator = self.branch.is_some() || self.head_commit.is_some();
-
-        let active_repo_name = self.active_repository.clone();
-
-        let repo_selector = PopoverMenu::new("repository-switcher")
-            .menu({
-                let project = project;
-                move |window, cx| {
-                    let project = project.clone()?;
-                    Some(cx.new(|cx| RepositorySelector::new(project, rems(20.), window, cx)))
-                }
-            })
-            .trigger_with_tooltip(
-                Button::new("repo-selector", active_repo_name)
-                    .size(ButtonSize::None)
-                    .label_size(LabelSize::Small)
-                    .truncate(true),
-                move |_, cx| {
-                    if single_repo {
-                        cx.new(|_| Empty).into()
-                    } else {
-                        Tooltip::simple("Switch Active Repository", cx)
-                    }
-                },
-            )
-            .anchor(Anchor::BottomLeft)
-            .offset(gpui::Point {
-                x: px(0.0),
-                y: px(-2.0),
-            })
-            .into_any_element();
 
         let branch_selector_button = Button::new("branch-selector", branch_name)
             .size(ButtonSize::None)
@@ -6374,41 +6370,99 @@ impl RenderOnce for PanelRepoFooter {
                 y: px(-2.0),
             });
 
-        h_flex()
-            .h_9()
-            .w_full()
-            .px_2()
-            .justify_between()
-            .gap_1()
-            .child(
-                h_flex()
-                    .flex_1()
-                    .overflow_hidden()
-                    .gap_px()
-                    .child(Icon::new(IconName::GitBranch).size(IconSize::Small).color(
-                        if single_repo {
-                            Color::Disabled
-                        } else {
-                            Color::Muted
-                        },
-                    ))
-                    .when(!single_repo, |this| {
-                        this.child(div().child(repo_selector).min_w_0()).when(
-                            show_separator,
-                            |this| {
-                                this.child(Label::new("/").size(LabelSize::Small).color(
-                                    Color::Custom(cx.theme().colors().text_muted.opacity(0.4)),
-                                ))
-                            },
-                        )
-                    })
-                    .child(div().child(branch_selector).min_w_0()),
+        let repo_tabs = if repositories.len() > 1 {
+            Some(
+                div()
+                    .flex()
+                    .flex_row()
+                    .w_full()
+                    .flex_wrap()
+                    .border_t_1()
+                    .border_color(cx.theme().colors().border)
+                    .bg(cx.theme().colors().panel_background)
+                    .children(repositories.into_iter().map(|repository| {
+                        let (display_name, repo_id, marker_status) = {
+                            let repo = repository.read(cx);
+                            (
+                                SharedString::from(repo.display_name()),
+                                repo.id.0,
+                                repository_status_marker_status(repo),
+                            )
+                        };
+                        let is_active = active_repo
+                            .as_ref()
+                            .is_some_and(|active_repo| active_repo == &repository);
+
+                        h_flex()
+                            .id(ElementId::Name(format!("repo-tab-{repo_id}").into()))
+                            .cursor_pointer()
+                            .h(Tab::container_height(cx))
+                            .min_w(rems(7.5))
+                            .flex_1()
+                            .min_w_0()
+                            .px_1p5()
+                            .gap_1()
+                            .justify_center()
+                            .border_b_1()
+                            .border_r_1()
+                            .border_color(cx.theme().colors().border_variant)
+                            .hover(|s| s.bg(cx.theme().colors().element_hover))
+                            .when(!is_active, |s| {
+                                s.bg(cx.theme().colors().editor_background.opacity(0.6))
+                            })
+                            .child(
+                                Label::new(display_name.clone())
+                                    .size(LabelSize::Small)
+                                    .truncate()
+                                    .when(!is_active, |this| this.color(Color::Muted)),
+                            )
+                            .children(marker_status.map(git_status_icon))
+                            .tooltip({
+                                let display_name = display_name.clone();
+                                move |_, cx| {
+                                    Tooltip::simple(format!("Switch to {}", display_name), cx)
+                                }
+                            })
+                            .on_click(move |_, _, cx| {
+                                repository.update(cx, |repository, cx| {
+                                    repository.set_as_active_repository(cx)
+                                });
+                            })
+                    })),
             )
-            .children(if let Some(git_panel) = self.git_panel {
-                git_panel.update(cx, |git_panel, cx| git_panel.render_remote_button(cx))
-            } else {
-                None
-            })
+        } else {
+            None
+        };
+
+        v_flex().w_full().children(repo_tabs).child(
+            h_flex()
+                .h_9()
+                .w_full()
+                .px_2()
+                .justify_between()
+                .gap_1()
+                .border_t_1()
+                .border_color(cx.theme().colors().border.opacity(0.6))
+                .child(Icon::new(IconName::GitBranch).size(IconSize::Small).color(
+                    if active_repo.is_none() {
+                        Color::Disabled
+                    } else {
+                        Color::Muted
+                    },
+                ))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .overflow_hidden()
+                        .child(branch_selector),
+                )
+                .children(if let Some(git_panel) = self.git_panel {
+                    git_panel.update(cx, |git_panel, cx| git_panel.render_remote_button(cx))
+                } else {
+                    None
+                }),
+        )
     }
 }
 
@@ -6490,10 +6544,6 @@ impl Component for PanelRepoFooter {
             }
         }
 
-        fn active_repository(id: usize) -> SharedString {
-            format!("repo-{}", id).into()
-        }
-
         let example_width = px(340.);
 
         v_flex()
@@ -6509,7 +6559,7 @@ impl Component for PanelRepoFooter {
                             div()
                                 .w(example_width)
                                 .overflow_hidden()
-                                .child(PanelRepoFooter::new_preview(active_repository(1), None))
+                                .child(PanelRepoFooter::new_preview(None))
                                 .into_any_element(),
                         ),
                         single_example(
@@ -6517,10 +6567,7 @@ impl Component for PanelRepoFooter {
                             div()
                                 .w(example_width)
                                 .overflow_hidden()
-                                .child(PanelRepoFooter::new_preview(
-                                    active_repository(2),
-                                    Some(branch(unknown_upstream)),
-                                ))
+                                .child(PanelRepoFooter::new_preview(Some(branch(unknown_upstream))))
                                 .into_any_element(),
                         ),
                         single_example(
@@ -6528,10 +6575,9 @@ impl Component for PanelRepoFooter {
                             div()
                                 .w(example_width)
                                 .overflow_hidden()
-                                .child(PanelRepoFooter::new_preview(
-                                    active_repository(3),
-                                    Some(branch(no_remote_upstream)),
-                                ))
+                                .child(PanelRepoFooter::new_preview(Some(branch(
+                                    no_remote_upstream,
+                                ))))
                                 .into_any_element(),
                         ),
                         single_example(
@@ -6539,10 +6585,9 @@ impl Component for PanelRepoFooter {
                             div()
                                 .w(example_width)
                                 .overflow_hidden()
-                                .child(PanelRepoFooter::new_preview(
-                                    active_repository(4),
-                                    Some(branch(not_ahead_or_behind_upstream)),
-                                ))
+                                .child(PanelRepoFooter::new_preview(Some(branch(
+                                    not_ahead_or_behind_upstream,
+                                ))))
                                 .into_any_element(),
                         ),
                         single_example(
@@ -6550,10 +6595,7 @@ impl Component for PanelRepoFooter {
                             div()
                                 .w(example_width)
                                 .overflow_hidden()
-                                .child(PanelRepoFooter::new_preview(
-                                    active_repository(5),
-                                    Some(branch(behind_upstream)),
-                                ))
+                                .child(PanelRepoFooter::new_preview(Some(branch(behind_upstream))))
                                 .into_any_element(),
                         ),
                         single_example(
@@ -6561,10 +6603,9 @@ impl Component for PanelRepoFooter {
                             div()
                                 .w(example_width)
                                 .overflow_hidden()
-                                .child(PanelRepoFooter::new_preview(
-                                    active_repository(6),
-                                    Some(branch(ahead_of_upstream)),
-                                ))
+                                .child(PanelRepoFooter::new_preview(Some(branch(
+                                    ahead_of_upstream,
+                                ))))
                                 .into_any_element(),
                         ),
                         single_example(
@@ -6572,10 +6613,9 @@ impl Component for PanelRepoFooter {
                             div()
                                 .w(example_width)
                                 .overflow_hidden()
-                                .child(PanelRepoFooter::new_preview(
-                                    active_repository(7),
-                                    Some(branch(ahead_and_behind_upstream)),
-                                ))
+                                .child(PanelRepoFooter::new_preview(Some(branch(
+                                    ahead_and_behind_upstream,
+                                ))))
                                 .into_any_element(),
                         ),
                     ],
@@ -6592,10 +6632,10 @@ impl Component for PanelRepoFooter {
                             div()
                                 .w(example_width)
                                 .overflow_hidden()
-                                .child(PanelRepoFooter::new_preview(
-                                    SharedString::from("zed"),
-                                    Some(custom("main", behind_upstream)),
-                                ))
+                                .child(PanelRepoFooter::new_preview(Some(custom(
+                                    "main",
+                                    behind_upstream,
+                                ))))
                                 .into_any_element(),
                         ),
                         single_example(
@@ -6603,13 +6643,10 @@ impl Component for PanelRepoFooter {
                             div()
                                 .w(example_width)
                                 .overflow_hidden()
-                                .child(PanelRepoFooter::new_preview(
-                                    SharedString::from("zed"),
-                                    Some(custom(
-                                        "redesign-and-update-git-ui-list-entry-style",
-                                        behind_upstream,
-                                    )),
-                                ))
+                                .child(PanelRepoFooter::new_preview(Some(custom(
+                                    "redesign-and-update-git-ui-list-entry-style",
+                                    behind_upstream,
+                                ))))
                                 .into_any_element(),
                         ),
                         single_example(
@@ -6617,10 +6654,10 @@ impl Component for PanelRepoFooter {
                             div()
                                 .w(example_width)
                                 .overflow_hidden()
-                                .child(PanelRepoFooter::new_preview(
-                                    SharedString::from("zed-industries-community-examples"),
-                                    Some(custom("gpui", ahead_of_upstream)),
-                                ))
+                                .child(PanelRepoFooter::new_preview(Some(custom(
+                                    "gpui",
+                                    ahead_of_upstream,
+                                ))))
                                 .into_any_element(),
                         ),
                         single_example(
@@ -6628,13 +6665,10 @@ impl Component for PanelRepoFooter {
                             div()
                                 .w(example_width)
                                 .overflow_hidden()
-                                .child(PanelRepoFooter::new_preview(
-                                    SharedString::from("zed-industries-community-examples"),
-                                    Some(custom(
-                                        "redesign-and-update-git-ui-list-entry-style",
-                                        behind_upstream,
-                                    )),
-                                ))
+                                .child(PanelRepoFooter::new_preview(Some(custom(
+                                    "redesign-and-update-git-ui-list-entry-style",
+                                    behind_upstream,
+                                ))))
                                 .into_any_element(),
                         ),
                         single_example(
@@ -6642,10 +6676,10 @@ impl Component for PanelRepoFooter {
                             div()
                                 .w(example_width)
                                 .overflow_hidden()
-                                .child(PanelRepoFooter::new_preview(
-                                    SharedString::from("LICENSES"),
-                                    Some(custom("main", ahead_of_upstream)),
-                                ))
+                                .child(PanelRepoFooter::new_preview(Some(custom(
+                                    "main",
+                                    ahead_of_upstream,
+                                ))))
                                 .into_any_element(),
                         ),
                         single_example(
@@ -6653,10 +6687,10 @@ impl Component for PanelRepoFooter {
                             div()
                                 .w(example_width)
                                 .overflow_hidden()
-                                .child(PanelRepoFooter::new_preview(
-                                    SharedString::from("zed"),
-                                    Some(custom("update-README", behind_upstream)),
-                                ))
+                                .child(PanelRepoFooter::new_preview(Some(custom(
+                                    "update-README",
+                                    behind_upstream,
+                                ))))
                                 .into_any_element(),
                         ),
                     ],

@@ -2678,6 +2678,16 @@ impl Workspace {
         cx.notify();
     }
 
+    pub(crate) fn should_reserve_window_controls_space_for_pane(
+        &self,
+        pane: &Entity<Pane>,
+        cx: &App,
+    ) -> bool {
+        self.titlebar_item.is_none()
+            && !self.left_dock.read(cx).is_open()
+            && self.center.first_pane() == *pane
+    }
+
     pub fn set_prompt_for_new_path(&mut self, prompt: PromptForNewPath) {
         self.on_prompt_for_new_path = Some(prompt)
     }
@@ -6432,11 +6442,32 @@ impl Workspace {
             return None;
         }
 
+        let dock_child = if self.titlebar_item.is_none()
+            && matches!(position, DockPosition::Left | DockPosition::Right)
+        {
+            div()
+                .flex()
+                .flex_col()
+                .size_full()
+                .child(
+                    div()
+                        .h(ui::Tab::container_height(cx))
+                        .flex_none()
+                        .bg(cx.theme().colors().tab_bar_background)
+                        .border_b_1()
+                        .border_color(cx.theme().colors().border_variant),
+                )
+                .child(div().flex_1().overflow_hidden().child(dock.clone()))
+                .into_any_element()
+        } else {
+            dock.clone().into_any_element()
+        };
+
         let mut container = div()
             .flex()
             .overflow_hidden()
             .flex_none()
-            .child(dock.clone());
+            .child(dock_child);
 
         // Apply sizing only when the dock is open. When closed the dock is still
         // included in the element tree so its focus handle remains mounted — without
