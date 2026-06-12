@@ -77,9 +77,7 @@ use language::{
         all_language_settings,
     },
     modeline, point_to_lsp,
-    proto::{
-        deserialize_anchor, deserialize_anchor_range, deserialize_version, serialize_anchor,
-    },
+    proto::{deserialize_anchor, deserialize_anchor_range, deserialize_version, serialize_anchor},
     range_from_lsp, range_to_lsp,
     row_chunk::RowChunk,
 };
@@ -1096,16 +1094,14 @@ impl LocalLspStore {
                     let request_id = request_id.clone();
                     let mut cx = cx.clone();
                     async move {
-                        lsp_store
-                            .update(&mut cx, |_lsp_store, cx| {
-                                let request_id =
-                                    Some(request_id.fetch_add(1, atomic::Ordering::AcqRel));
-                                cx.emit(LspStoreEvent::RefreshInlayHints {
-                                    server_id,
-                                    request_id,
-                                });
-                            })?
-                            ;
+                        lsp_store.update(&mut cx, |_lsp_store, cx| {
+                            let request_id =
+                                Some(request_id.fetch_add(1, atomic::Ordering::AcqRel));
+                            cx.emit(LspStoreEvent::RefreshInlayHints {
+                                server_id,
+                                request_id,
+                            });
+                        })?;
                         Ok(())
                     }
                 }
@@ -1122,8 +1118,7 @@ impl LocalLspStore {
                         this.update(&mut cx, |this, cx| {
                             this.invalidate_code_lens();
                             cx.emit(LspStoreEvent::RefreshCodeLens);
-                        })?
-                        ;
+                        })?;
                         Ok(())
                     }
                 }
@@ -1139,16 +1134,14 @@ impl LocalLspStore {
                     let request_id = request_id.clone();
                     let mut cx = cx.clone();
                     async move {
-                        lsp_store
-                            .update(&mut cx, |_lsp_store, cx| {
-                                let request_id =
-                                    Some(request_id.fetch_add(1, atomic::Ordering::AcqRel));
-                                cx.emit(LspStoreEvent::RefreshSemanticTokens {
-                                    server_id,
-                                    request_id,
-                                });
-                            })?
-                            ;
+                        lsp_store.update(&mut cx, |_lsp_store, cx| {
+                            let request_id =
+                                Some(request_id.fetch_add(1, atomic::Ordering::AcqRel));
+                            cx.emit(LspStoreEvent::RefreshSemanticTokens {
+                                server_id,
+                                request_id,
+                            });
+                        })?;
                         Ok(())
                     }
                 }
@@ -5543,9 +5536,7 @@ impl LspStore {
                         .next()
                 })
             })
-            .or_else(|| {
-                None
-            })
+            .or_else(|| None)
             .filter(|_| {
                 maybe!({
                     buffer.read(cx).language_at(position)?;
@@ -5710,8 +5701,12 @@ impl LspStore {
         position: PointUtf16,
         cx: &mut Context<Self>,
     ) -> Task<Result<Option<Vec<LocationLink>>>> {
-        let declarations_task =
-            self.request_multiple_lsp_locally(buffer, Some(position), GetDeclarations { position }, cx);
+        let declarations_task = self.request_multiple_lsp_locally(
+            buffer,
+            Some(position),
+            GetDeclarations { position },
+            cx,
+        );
         cx.background_spawn(async move {
             Ok(Some(
                 declarations_task
@@ -5776,8 +5771,12 @@ impl LspStore {
         position: PointUtf16,
         cx: &mut Context<Self>,
     ) -> Task<Result<Option<Vec<LocationLink>>>> {
-        let implementations_task =
-            self.request_multiple_lsp_locally(buffer, Some(position), GetImplementations { position }, cx);
+        let implementations_task = self.request_multiple_lsp_locally(
+            buffer,
+            Some(position),
+            GetImplementations { position },
+            cx,
+        );
         cx.background_spawn(async move {
             Ok(Some(
                 implementations_task
@@ -5796,8 +5795,12 @@ impl LspStore {
         position: PointUtf16,
         cx: &mut Context<Self>,
     ) -> Task<Result<Option<Vec<Location>>>> {
-        let references_task =
-            self.request_multiple_lsp_locally(buffer, Some(position), GetReferences { position }, cx);
+        let references_task = self.request_multiple_lsp_locally(
+            buffer,
+            Some(position),
+            GetReferences { position },
+            cx,
+        );
         cx.background_spawn(async move {
             Ok(Some(
                 references_task
@@ -6210,92 +6213,91 @@ impl LspStore {
         };
 
         cx.spawn(async move |this, cx| {
-                Self::resolve_completion_local(
-                    server.clone(),
-                    completions.clone(),
-                    completion_index,
-                    request_timeout,
-                )
-                .await
-                .context("resolving completion")?;
-                let completion = completions.borrow()[completion_index].clone();
-                let additional_text_edits = completion
-                    .source
-                    .lsp_completion(true)
-                    .as_ref()
-                    .and_then(|lsp_completion| lsp_completion.additional_text_edits.clone());
-                if let Some(edits) = additional_text_edits {
-                    let edits = this
-                        .update(cx, |this, cx| {
-                            this.as_local_mut().unwrap().edits_from_lsp(
-                                &buffer_handle,
-                                edits,
-                                server.server_id(),
-                                None,
-                                cx,
-                            )
-                        })?
-                        .await?;
+            Self::resolve_completion_local(
+                server.clone(),
+                completions.clone(),
+                completion_index,
+                request_timeout,
+            )
+            .await
+            .context("resolving completion")?;
+            let completion = completions.borrow()[completion_index].clone();
+            let additional_text_edits = completion
+                .source
+                .lsp_completion(true)
+                .as_ref()
+                .and_then(|lsp_completion| lsp_completion.additional_text_edits.clone());
+            if let Some(edits) = additional_text_edits {
+                let edits = this
+                    .update(cx, |this, cx| {
+                        this.as_local_mut().unwrap().edits_from_lsp(
+                            &buffer_handle,
+                            edits,
+                            server.server_id(),
+                            None,
+                            cx,
+                        )
+                    })?
+                    .await?;
 
-                    buffer_handle.update(cx, |buffer, cx| {
-                        buffer.finalize_last_transaction();
-                        buffer.start_transaction();
+                buffer_handle.update(cx, |buffer, cx| {
+                    buffer.finalize_last_transaction();
+                    buffer.start_transaction();
 
-                        for (range, text) in edits {
-                            let primary = &completion.replace_range;
+                    for (range, text) in edits {
+                        let primary = &completion.replace_range;
 
-                            // Special case: if both ranges start at the very beginning of the file (line 0, column 0),
-                            // and the primary completion is just an insertion (empty range), then this is likely
-                            // an auto-import scenario and should not be considered overlapping
-                            // https://github.com/zed-industries/zed/issues/26136
-                            let is_file_start_auto_import = {
-                                let snapshot = buffer.snapshot();
-                                let primary_start_point = primary.start.to_point(&snapshot);
-                                let range_start_point = range.start.to_point(&snapshot);
+                        // Special case: if both ranges start at the very beginning of the file (line 0, column 0),
+                        // and the primary completion is just an insertion (empty range), then this is likely
+                        // an auto-import scenario and should not be considered overlapping
+                        // https://github.com/zed-industries/zed/issues/26136
+                        let is_file_start_auto_import = {
+                            let snapshot = buffer.snapshot();
+                            let primary_start_point = primary.start.to_point(&snapshot);
+                            let range_start_point = range.start.to_point(&snapshot);
 
-                                let result = primary_start_point.row == 0
-                                    && primary_start_point.column == 0
-                                    && range_start_point.row == 0
-                                    && range_start_point.column == 0;
+                            let result = primary_start_point.row == 0
+                                && primary_start_point.column == 0
+                                && range_start_point.row == 0
+                                && range_start_point.column == 0;
 
-                                result
-                            };
-
-                            let has_overlap = if is_file_start_auto_import {
-                                false
-                            } else {
-                                all_commit_ranges.iter().any(|commit_range| {
-                                    let start_within =
-                                        commit_range.start.cmp(&range.start, buffer).is_le()
-                                            && commit_range.end.cmp(&range.start, buffer).is_ge();
-                                    let end_within =
-                                        range.start.cmp(&commit_range.end, buffer).is_le()
-                                            && range.end.cmp(&commit_range.end, buffer).is_ge();
-                                    start_within || end_within
-                                })
-                            };
-
-                            //Skip additional edits which overlap with the primary completion edit
-                            //https://github.com/zed-industries/zed/pull/1871
-                            if !has_overlap {
-                                buffer.edit([(range, text)], None, cx);
-                            }
-                        }
-
-                        let transaction = if buffer.end_transaction(cx).is_some() {
-                            let transaction = buffer.finalize_last_transaction().unwrap().clone();
-                            if !push_to_history {
-                                buffer.forget_transaction(transaction.id);
-                            }
-                            Some(transaction)
-                        } else {
-                            None
+                            result
                         };
-                        Ok(transaction)
-                    })
-                } else {
-                    Ok(None)
-                }
+
+                        let has_overlap = if is_file_start_auto_import {
+                            false
+                        } else {
+                            all_commit_ranges.iter().any(|commit_range| {
+                                let start_within =
+                                    commit_range.start.cmp(&range.start, buffer).is_le()
+                                        && commit_range.end.cmp(&range.start, buffer).is_ge();
+                                let end_within = range.start.cmp(&commit_range.end, buffer).is_le()
+                                    && range.end.cmp(&commit_range.end, buffer).is_ge();
+                                start_within || end_within
+                            })
+                        };
+
+                        //Skip additional edits which overlap with the primary completion edit
+                        //https://github.com/zed-industries/zed/pull/1871
+                        if !has_overlap {
+                            buffer.edit([(range, text)], None, cx);
+                        }
+                    }
+
+                    let transaction = if buffer.end_transaction(cx).is_some() {
+                        let transaction = buffer.finalize_last_transaction().unwrap().clone();
+                        if !push_to_history {
+                            buffer.forget_transaction(transaction.id);
+                        }
+                        Some(transaction)
+                    } else {
+                        None
+                    };
+                    Ok(transaction)
+                })
+            } else {
+                Ok(None)
+            }
         })
     }
 
@@ -6312,48 +6314,48 @@ impl LspStore {
                 .collect::<Vec<_>>()
         });
 
-            let pull_diagnostics = servers
-                .into_iter()
-                .flat_map(|server| {
-                    let result = maybe!({
-                        let local = self.as_local()?;
-                        let server_id = server.server_id();
-                        let providers_with_identifiers = local
-                            .language_server_dynamic_registrations
-                            .get(&server_id)
+        let pull_diagnostics = servers
+            .into_iter()
+            .flat_map(|server| {
+                let result = maybe!({
+                    let local = self.as_local()?;
+                    let server_id = server.server_id();
+                    let providers_with_identifiers = local
+                        .language_server_dynamic_registrations
+                        .get(&server_id)
+                        .into_iter()
+                        .flat_map(|registrations| registrations.diagnostics.clone())
+                        .collect::<Vec<_>>();
+                    Some(
+                        providers_with_identifiers
                             .into_iter()
-                            .flat_map(|registrations| registrations.diagnostics.clone())
-                            .collect::<Vec<_>>();
-                        Some(
-                            providers_with_identifiers
-                                .into_iter()
-                                .map(|(registration_id, dynamic_caps)| {
-                                    let identifier = buffer_diagnostic_identifier(&dynamic_caps);
-                                    let registration_id = registration_id.map(SharedString::from);
-                                    let result_id = self.result_id_for_buffer_pull(
-                                        server_id,
-                                        buffer_id,
-                                        &registration_id,
-                                        cx,
-                                    );
-                                    self.request_lsp(
-                                        buffer.clone(),
-                                        LanguageServerToQuery::Other(server_id),
-                                        GetDocumentDiagnostics {
-                                            previous_result_id: result_id,
-                                            registration_id,
-                                            identifier,
-                                        },
-                                        cx,
-                                    )
-                                })
-                                .collect::<Vec<_>>(),
-                        )
-                    });
+                            .map(|(registration_id, dynamic_caps)| {
+                                let identifier = buffer_diagnostic_identifier(&dynamic_caps);
+                                let registration_id = registration_id.map(SharedString::from);
+                                let result_id = self.result_id_for_buffer_pull(
+                                    server_id,
+                                    buffer_id,
+                                    &registration_id,
+                                    cx,
+                                );
+                                self.request_lsp(
+                                    buffer.clone(),
+                                    LanguageServerToQuery::Other(server_id),
+                                    GetDocumentDiagnostics {
+                                        previous_result_id: result_id,
+                                        registration_id,
+                                        identifier,
+                                    },
+                                    cx,
+                                )
+                            })
+                            .collect::<Vec<_>>(),
+                    )
+                });
 
-                    result.unwrap_or_default()
-                })
-                .collect::<Vec<_>>();
+                result.unwrap_or_default()
+            })
+            .collect::<Vec<_>>();
 
         cx.background_spawn(async move {
             let mut responses = Vec::new();
@@ -6619,9 +6621,9 @@ impl LspStore {
                     match server_task.await {
                         Ok(response) => responses.push((server_id, response)),
                         Err(e) if format!("{e:#}").ends_with("content modified") => (),
-                        Err(e) => log::error!(
-                            "Error handling response for inlay hints request: {e:#}"
-                        ),
+                        Err(e) => {
+                            log::error!("Error handling response for inlay hints request: {e:#}")
+                        }
                     }
                     responses
                 })
@@ -6779,8 +6781,12 @@ impl LspStore {
     ) -> Task<Option<Vec<SignatureHelp>>> {
         let position = position.to_point_utf16(buffer.read(cx));
 
-        let all_actions_task =
-            self.request_multiple_lsp_locally(buffer, Some(position), GetSignatureHelp { position }, cx);
+        let all_actions_task = self.request_multiple_lsp_locally(
+            buffer,
+            Some(position),
+            GetSignatureHelp { position },
+            cx,
+        );
         cx.background_spawn(async move {
             Some(
                 all_actions_task

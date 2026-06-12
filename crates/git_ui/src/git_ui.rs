@@ -387,8 +387,15 @@ impl Render for RenameBranchModal {
                     .gap_1p5()
                     .child(Icon::new(IconName::GitBranch).size(IconSize::XSmall))
                     .child(
-                        Headline::new(format!("Rename Branch ({})", self.current_branch))
-                            .size(HeadlineSize::XSmall),
+                        Headline::new(match localization::current_language(cx) {
+                            localization::UiLanguage::ChineseSimplified => {
+                                format!("重命名分支（{}）", self.current_branch)
+                            }
+                            localization::UiLanguage::English => {
+                                format!("Rename Branch ({})", self.current_branch)
+                            }
+                        })
+                        .size(HeadlineSize::XSmall),
                     ),
             )
             .child(div().px_3().pb_3().w_full().child(self.editor.clone()))
@@ -455,7 +462,7 @@ impl RefPickerModal {
     ) -> Self {
         let editor = cx.new(|cx| {
             let mut editor = Editor::single_line(window, cx);
-            editor.set_placeholder_text("Enter git ref...", window, cx);
+            editor.set_localized_placeholder_text("Enter git ref...", window, cx);
             editor
         });
 
@@ -640,7 +647,7 @@ impl Render for RefPickerModal {
                     .w_full()
                     .gap_1p5()
                     .child(Icon::new(IconName::Hash).size(IconSize::XSmall))
-                    .child(Headline::new("View Commit").size(HeadlineSize::XSmall)),
+                    .child(Headline::localized("View Commit").size(HeadlineSize::XSmall)),
             )
             .child(div().px_3().w_full().child(self.editor.clone()))
             .when_some(commit_preview, |el, preview| {
@@ -885,14 +892,14 @@ mod remote_button {
                         .when_some(keybinding_target.clone(), |el, keybinding_target| {
                             el.context(keybinding_target)
                         })
-                        .action("Fetch", git::Fetch.boxed_clone())
-                        .action("Fetch From", git::FetchFrom.boxed_clone())
-                        .action("Pull", git::Pull.boxed_clone())
-                        .action("Pull (Rebase)", git::PullRebase.boxed_clone())
+                        .action_localized("Fetch", git::Fetch.boxed_clone())
+                        .action_localized("Fetch From", git::FetchFrom.boxed_clone())
+                        .action_localized("Pull", git::Pull.boxed_clone())
+                        .action_localized("Pull (Rebase)", git::PullRebase.boxed_clone())
                         .separator()
-                        .action("Push", git::Push.boxed_clone())
-                        .action("Push To", git::PushTo.boxed_clone())
-                        .action("Force Push", git::ForcePush.boxed_clone())
+                        .action_localized("Push", git::Push.boxed_clone())
+                        .action_localized("Push To", git::PushTo.boxed_clone())
+                        .action_localized("Force Push", git::ForcePush.boxed_clone())
                 }))
             })
             .anchor(Anchor::TopRight)
@@ -1064,7 +1071,7 @@ impl GitCloneModal {
     pub fn show(panel: Entity<GitPanel>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let repo_input = cx.new(|cx| {
             let mut editor = Editor::single_line(window, cx);
-            editor.set_placeholder_text("Enter repository URL…", window, cx);
+            editor.set_localized_placeholder_text("Enter repository URL…", window, cx);
             editor
         });
         let focus_handle = repo_input.focus_handle(cx);
@@ -1108,12 +1115,12 @@ impl Render for GitCloneModal {
                     .rounded_b_sm()
                     .bg(cx.theme().colors().editor_background)
                     .child(
-                        Label::new("Clone a repository from GitHub or other sources.")
+                        Label::localized("Clone a repository from GitHub or other sources.")
                             .color(Color::Muted)
                             .size(LabelSize::Small),
                     )
                     .child(
-                        Button::new("learn-more", "Learn More")
+                        Button::localized("learn-more", "Learn More")
                             .label_size(LabelSize::Small)
                             .end_icon(Icon::new(IconName::ArrowUpRight).size(IconSize::XSmall))
                             .on_click(|_, _, cx| {

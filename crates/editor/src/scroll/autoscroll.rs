@@ -428,5 +428,4 @@ impl Editor {
         self.scroll_manager.autoscroll_request = Some((autoscroll, true));
         cx.notify();
     }
-
 }

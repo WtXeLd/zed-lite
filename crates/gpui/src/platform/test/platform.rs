@@ -78,7 +78,7 @@ impl ScreenCaptureStream for TestScreenCaptureStream {
 struct TestPrompt {
     msg: String,
     detail: Option<String>,
-    answers: Vec<String>,
+    answers: Vec<(Option<String>, String)>,
     tx: oneshot::Sender<usize>,
 }
 
@@ -187,10 +187,19 @@ impl TestPlatform {
             .multiple_choice
             .pop_front()
             .expect("no pending multiple choice prompt");
-        let Some(ix) = prompt.answers.iter().position(|a| a == response) else {
+        let Some(ix) = prompt
+            .answers
+            .iter()
+            .position(|(id, label)| id.as_deref() == Some(response) || label == response)
+        else {
+            let answers: Vec<_> = prompt
+                .answers
+                .iter()
+                .map(|(id, label)| id.as_deref().unwrap_or(label.as_str()))
+                .collect();
             panic!(
                 "PROMPT: {}\n{:?}\n{:?}\nCannot respond with {}",
-                prompt.msg, prompt.detail, prompt.answers, response
+                prompt.msg, prompt.detail, answers, response
             )
         };
         prompt.tx.send(ix).ok();
@@ -220,7 +229,15 @@ impl TestPlatform {
         answers: &[PromptButton],
     ) -> oneshot::Receiver<usize> {
         let (tx, rx) = oneshot::channel();
-        let answers: Vec<String> = answers.iter().map(|s| s.label().to_string()).collect();
+        let answers: Vec<(Option<String>, String)> = answers
+            .iter()
+            .map(|answer| {
+                (
+                    answer.stable_id().map(str::to_string),
+                    answer.label().to_string(),
+                )
+            })
+            .collect();
         self.prompts
             .borrow_mut()
             .multiple_choice

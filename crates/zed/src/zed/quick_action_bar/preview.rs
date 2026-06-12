@@ -86,15 +86,17 @@ impl QuickActionBar {
             .icon_size(IconSize::Small)
             .style(ButtonStyle::Subtle)
             .tooltip(move |_window, cx| {
-                Tooltip::with_meta(
-                    tooltip_text,
-                    Some(open_action_for_tooltip),
-                    format!(
-                        "{} to open in a split",
-                        text_for_keystroke(&alt_click.modifiers, &alt_click.key, cx)
-                    ),
-                    cx,
-                )
+                let title = localization::t(cx, tooltip_text);
+                let keystroke = text_for_keystroke(&alt_click.modifiers, &alt_click.key, cx);
+                let meta = match localization::current_language(cx) {
+                    localization::UiLanguage::ChineseSimplified => {
+                        format!("{keystroke} 在拆分窗格中打开")
+                    }
+                    localization::UiLanguage::English => {
+                        format!("{keystroke} to open in a split")
+                    }
+                };
+                Tooltip::with_meta(title, Some(open_action_for_tooltip), meta, cx)
             })
             .on_click(move |_, window, cx| {
                 if let Some(workspace) = workspace_handle.upgrade() {

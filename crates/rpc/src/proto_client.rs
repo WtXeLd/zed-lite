@@ -625,7 +625,6 @@ impl AnyProtoClient {
             },
         );
     }
-
 }
 
 fn to_any_envelope<T: EnvelopedMessage>(

@@ -286,7 +286,7 @@ impl SystemWindowTabs {
                 let merge_tabs = tabs.clone();
 
                 ContextMenu::build(window, cx, move |mut menu, _window_, _cx| {
-                    menu = menu.entry("Close Tab", None, move |window, cx| {
+                    menu = menu.entry_localized("Close Tab", None, move |window, cx| {
                         Self::handle_right_click_action(
                             cx,
                             window,
@@ -298,7 +298,7 @@ impl SystemWindowTabs {
                         );
                     });
 
-                    menu = menu.entry("Close Other Tabs", None, move |window, cx| {
+                    menu = menu.entry_localized("Close Other Tabs", None, move |window, cx| {
                         Self::handle_right_click_action(
                             cx,
                             window,
@@ -310,23 +310,24 @@ impl SystemWindowTabs {
                         );
                     });
 
-                    menu = menu.entry("Move Tab to New Window", None, move |window, cx| {
-                        Self::handle_right_click_action(
-                            cx,
-                            window,
-                            &move_tabs,
-                            |tab| tab.id == item.id,
-                            |window, cx| {
-                                SystemWindowTabController::move_tab_to_new_window(
-                                    cx,
-                                    window.window_handle().window_id(),
-                                );
-                                window.move_tab_to_new_window();
-                            },
-                        );
-                    });
+                    menu =
+                        menu.entry_localized("Move Tab to New Window", None, move |window, cx| {
+                            Self::handle_right_click_action(
+                                cx,
+                                window,
+                                &move_tabs,
+                                |tab| tab.id == item.id,
+                                |window, cx| {
+                                    SystemWindowTabController::move_tab_to_new_window(
+                                        cx,
+                                        window.window_handle().window_id(),
+                                    );
+                                    window.move_tab_to_new_window();
+                                },
+                            );
+                        });
 
-                    menu = menu.entry("Show All Tabs", None, move |window, cx| {
+                    menu = menu.entry_localized("Show All Tabs", None, move |window, cx| {
                         Self::handle_right_click_action(
                             cx,
                             window,

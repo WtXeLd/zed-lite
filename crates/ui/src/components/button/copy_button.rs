@@ -35,7 +35,7 @@ pub struct CopyButton {
     message: SharedString,
     icon_size: IconSize,
     disabled: bool,
-    tooltip_label: SharedString,
+    tooltip_label: localization::LocalizableString,
     visible_on_hover: Option<SharedString>,
     custom_on_click: Option<Box<dyn Fn(&mut Window, &mut App) + 'static>>,
 }
@@ -47,7 +47,7 @@ impl CopyButton {
             message: message.into(),
             icon_size: IconSize::Small,
             disabled: false,
-            tooltip_label: "Copy".into(),
+            tooltip_label: localization::ui("Copy"),
             visible_on_hover: None,
             custom_on_click: None,
         }
@@ -64,7 +64,12 @@ impl CopyButton {
     }
 
     pub fn tooltip_label(mut self, tooltip_label: impl Into<SharedString>) -> Self {
-        self.tooltip_label = tooltip_label.into();
+        self.tooltip_label = localization::LocalizableString::User(tooltip_label.into());
+        self
+    }
+
+    pub fn localized_tooltip_label(mut self, tooltip_label: &'static str) -> Self {
+        self.tooltip_label = localization::ui(tooltip_label);
         self
     }
 
@@ -94,7 +99,7 @@ impl RenderOnce for CopyButton {
         let is_copied = state.read(cx).is_copied();
 
         let (icon, color, tooltip) = if is_copied {
-            (IconName::Check, Color::Success, "Copied!".into())
+            (IconName::Check, Color::Success, localization::ui("Copied!"))
         } else {
             (IconName::Copy, Color::Muted, self.tooltip_label)
         };

@@ -1,15 +1,14 @@
 use crate::{
-    NewFile, Open, OpenMode, PathList, RecentWorkspace, SerializedWorkspaceLocation,
-    Workspace,
+    NewFile, Open, OpenMode, PathList, RecentWorkspace, SerializedWorkspaceLocation, Workspace,
     item::{Item, ItemEvent},
     persistence::WorkspaceDb,
 };
 use git::Clone as GitClone;
+use gpui::WeakEntity;
 use gpui::{
     Action, App, Context, Entity, EventEmitter, FocusHandle, Focusable, InteractiveElement,
     ParentElement, Render, Styled, Task, TaskExt, Window, actions,
 };
-use gpui::WeakEntity;
 use menu::{SelectNext, SelectPrevious};
 
 use schemars::JsonSchema;
@@ -35,11 +34,11 @@ actions!(
 
 #[derive(IntoElement)]
 struct SectionHeader {
-    title: SharedString,
+    title: localization::LocalizableString,
 }
 
 impl SectionHeader {
-    fn new(title: impl Into<SharedString>) -> Self {
+    fn new(title: impl Into<localization::LocalizableString>) -> Self {
         Self {
             title: title.into(),
         }
@@ -48,12 +47,13 @@ impl SectionHeader {
 
 impl RenderOnce for SectionHeader {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let title = self.title.resolve(cx).to_ascii_uppercase();
         h_flex()
             .px_1()
             .mb_2()
             .gap_2()
             .child(
-                Label::new(self.title.to_ascii_uppercase())
+                Label::new(title)
                     .buffer_font(cx)
                     .color(Color::Muted)
                     .size(LabelSize::XSmall),
@@ -64,7 +64,7 @@ impl RenderOnce for SectionHeader {
 
 #[derive(IntoElement)]
 struct SectionButton {
-    label: SharedString,
+    label: localization::LocalizableString,
     icon: IconName,
     action: Box<dyn Action>,
     tab_index: usize,
@@ -73,7 +73,7 @@ struct SectionButton {
 
 impl SectionButton {
     fn new(
-        label: impl Into<SharedString>,
+        label: impl Into<localization::LocalizableString>,
         icon: IconName,
         action: &dyn Action,
         tab_index: usize,
@@ -91,7 +91,8 @@ impl SectionButton {
 
 impl RenderOnce for SectionButton {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let id = format!("onb-button-{}-{}", self.label, self.tab_index);
+        let id = format!("onb-button-{}-{}", self.label.source_text(), self.tab_index);
+        let label = self.label.resolve(cx);
         let action_ref: &dyn Action = &*self.action;
 
         ButtonLike::new(id)
@@ -110,7 +111,7 @@ impl RenderOnce for SectionButton {
                                     .color(Color::Muted)
                                     .size(IconSize::Small),
                             )
-                            .child(Label::new(self.label)),
+                            .child(Label::new(label)),
                     )
                     .child(
                         KeyBinding::for_action_in(action_ref, &self.focus_handle, cx)
@@ -146,7 +147,7 @@ impl SectionEntry {
     fn render(&self, button_index: usize, focus: &FocusHandle) -> Option<impl IntoElement> {
         self.visibility_guard.is_visible().then(|| {
             SectionButton::new(
-                self.title,
+                localization::ui(self.title),
                 self.icon,
                 self.action,
                 button_index,
@@ -223,7 +224,7 @@ impl<const COLS: usize> Section<COLS> {
     fn render(self, index_offset: usize, focus: &FocusHandle) -> impl IntoElement {
         v_flex()
             .min_w_full()
-            .child(SectionHeader::new(self.title))
+            .child(SectionHeader::new(localization::ui(self.title)))
             .children(
                 self.entries
                     .iter()
@@ -324,7 +325,7 @@ impl WelcomePage {
     ) -> impl IntoElement {
         v_flex()
             .w_full()
-            .child(SectionHeader::new("Recent Projects"))
+            .child(SectionHeader::new(localization::ui("Recent Projects")))
             .children(recent_projects)
     }
 
@@ -387,9 +388,9 @@ impl Render for WelcomePage {
         };
 
         let welcome_label = if self.fallback_to_recent_projects {
-            "Welcome back to Zed"
+            localization::ui("Welcome back to Zed")
         } else {
-            "Welcome to Zed"
+            localization::ui("Welcome to Zed")
         };
 
         h_flex()
@@ -418,12 +419,14 @@ impl Render for WelcomePage {
                             .gap_4()
                             .child(Vector::square(VectorName::ZedLogo, rems_from_px(45.)))
                             .child(
-                                v_flex().child(Headline::new(welcome_label)).child(
-                                    Label::new("The editor for what's next")
-                                        .size(LabelSize::Small)
-                                        .color(Color::Muted)
-                                        .italic(),
-                                ),
+                                v_flex()
+                                    .child(Headline::new(welcome_label.resolve(cx)))
+                                    .child(
+                                        Label::localized("The editor for what's next")
+                                            .size(LabelSize::Small)
+                                            .color(Color::Muted)
+                                            .italic(),
+                                    ),
                             ),
                     )
                     .child(first_section.render(Default::default(), &self.focus_handle))
@@ -444,7 +447,7 @@ impl Item for WelcomePage {
     type Event = ItemEvent;
 
     fn tab_content_text(&self, _detail: usize, _cx: &App) -> SharedString {
-        "Welcome".into()
+        localization::translate(localization::current_language(_cx), "Welcome").into()
     }
 
     fn telemetry_event_text(&self) -> Option<&'static str> {

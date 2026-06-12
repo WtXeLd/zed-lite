@@ -138,13 +138,12 @@ use git::blame::{GitBlame, GlobalBlameRenderer};
 use gpui::{
     Action, AnyElement, App, AppContext, AsyncWindowContext, Background, Bounds, ClickEvent,
     ClipboardEntry, ClipboardItem, Context, DispatchPhase, Entity, EntityId, EntityInputHandler,
-    EventEmitter, FocusHandle,
-    FocusOutEvent, Focusable, FontId, FontStyle, FontWeight, Global, HighlightStyle, Hsla,
-    KeyContext, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, PaintQuad, ParentElement,
-    Pixels, PressureStage, Render, ScrollHandle, SharedString, SharedUri, Size, Styled,
-    Subscription, Task, TextRun, TextStyle, TextStyleRefinement, UTF16Selection, UnderlineStyle,
-    UniformListScrollHandle, WeakEntity, WeakFocusHandle, Window, div, point, prelude::*,
-    px, relative, size,
+    EventEmitter, FocusHandle, FocusOutEvent, Focusable, FontId, FontStyle, FontWeight, Global,
+    HighlightStyle, Hsla, KeyContext, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent,
+    PaintQuad, ParentElement, Pixels, PressureStage, Render, ScrollHandle, SharedString, SharedUri,
+    Size, Styled, Subscription, Task, TextRun, TextStyle, TextStyleRefinement, UTF16Selection,
+    UnderlineStyle, UniformListScrollHandle, WeakEntity, WeakFocusHandle, Window, div, point,
+    prelude::*, px, relative, size,
 };
 use hover_links::{HoverLink, HoveredLinkState, find_file};
 use hover_popover::{HoverState, hide_hover};
@@ -154,10 +153,10 @@ use itertools::{Either, Itertools};
 use language::{
     AutoindentMode, BlockCommentConfig, BracketMatch, BracketPair, Buffer, BufferRow,
     BufferSnapshot, Capability, CharClassifier, CharKind, CharScopeContext, CodeLabel, CursorShape,
-    DiagnosticEntryRef, DiffOptions, HighlightedText, IndentKind,
-    IndentSize, Language, LanguageAwareStyling, LanguageName, LanguageRegistry, LanguageScope,
-    LocalFile, OffsetRangeExt, OutlineItem, Point, Selection, SelectionGoal, TextObject,
-    TransactionId, TreeSitterOptions, WordsQuery,
+    DiagnosticEntryRef, DiffOptions, HighlightedText, IndentKind, IndentSize, Language,
+    LanguageAwareStyling, LanguageName, LanguageRegistry, LanguageScope, LocalFile, OffsetRangeExt,
+    OutlineItem, Point, Selection, SelectionGoal, TextObject, TransactionId, TreeSitterOptions,
+    WordsQuery,
     language_settings::{
         self, AllLanguageSettings, LanguageSettings, LspInsertMode, RewrapBehavior,
         WordsCompletionMode,
@@ -179,9 +178,8 @@ use multi_buffer::{
 use persistence::EditorDb;
 use project::{
     CodeAction, Completion, CompletionDisplayOptions, CompletionIntent, CompletionResponse,
-    CompletionSource, DocumentHighlight, InvalidationStrategy, Location,
-    LocationLink, LspAction, PrepareRenameResponse, Project, ProjectItem, ProjectPath,
-    ProjectTransaction,
+    CompletionSource, DocumentHighlight, InvalidationStrategy, Location, LocationLink, LspAction,
+    PrepareRenameResponse, Project, ProjectItem, ProjectPath, ProjectTransaction,
     bookmark_store::BookmarkStore,
     git_store::GitStoreEvent,
     lsp_store::{
@@ -888,6 +886,8 @@ pub struct Editor {
     /// Handles soft wraps, folds, fake inlay text insertions, etc.
     pub display_map: Entity<DisplayMap>,
     placeholder_display_map: Option<Entity<DisplayMap>>,
+    placeholder_text: Option<localization::LocalizableString>,
+    resolved_placeholder_text: Option<SharedString>,
     pub selections: SelectionsCollection,
     /// Manages the scroll position for the given editor.
     ///
@@ -2037,6 +2037,8 @@ impl Editor {
             buffer: multi_buffer.clone(),
             display_map: display_map.clone(),
             placeholder_display_map: None,
+            placeholder_text: None,
+            resolved_placeholder_text: None,
             selections,
             scroll_manager: ScrollManager::new(cx),
             columnar_selection_state: None,
@@ -2767,8 +2769,46 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let multibuffer = cx
-            .new(|cx| MultiBuffer::singleton(cx.new(|cx| Buffer::local(placeholder_text, cx)), cx));
+        self.placeholder_text = Some(localization::LocalizableString::User(
+            placeholder_text.to_string().into(),
+        ));
+        self.set_resolved_placeholder_text(placeholder_text.into(), window, cx);
+    }
+
+    pub fn set_localized_placeholder_text(
+        &mut self,
+        placeholder_text: &'static str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.placeholder_text = Some(localization::ui(placeholder_text));
+        let placeholder_text = localization::t(cx, placeholder_text);
+        self.set_resolved_placeholder_text(placeholder_text, window, cx);
+    }
+
+    fn refresh_placeholder_text(&mut self, window: &Window, cx: &mut Context<Self>) {
+        let Some(placeholder_text) = self.placeholder_text.clone() else {
+            return;
+        };
+        let placeholder_text = placeholder_text.resolve(cx);
+        if self.resolved_placeholder_text.as_ref() == Some(&placeholder_text) {
+            return;
+        }
+        self.set_resolved_placeholder_text(placeholder_text, window, cx);
+    }
+
+    fn set_resolved_placeholder_text(
+        &mut self,
+        placeholder_text: SharedString,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        let multibuffer = cx.new(|cx| {
+            MultiBuffer::singleton(
+                cx.new(|cx| Buffer::local(placeholder_text.as_ref(), cx)),
+                cx,
+            )
+        });
 
         let style = window.text_style();
 
@@ -2785,6 +2825,7 @@ impl Editor {
                 cx,
             )
         }));
+        self.resolved_placeholder_text = Some(placeholder_text);
         cx.notify();
     }
 
@@ -3817,11 +3858,10 @@ impl Editor {
     }
 
     pub fn context_menu_visible(&self) -> bool {
-        self
-                .context_menu
-                .borrow()
-                .as_ref()
-                .is_some_and(|menu| menu.visible())
+        self.context_menu
+            .borrow()
+            .as_ref()
+            .is_some_and(|menu| menu.visible())
     }
 
     pub fn context_menu_origin(&self) -> Option<ContextMenuOrigin> {
@@ -5017,13 +5057,7 @@ impl Editor {
             .to_path_buf();
             Some(parent)
         }) {
-            window.dispatch_action(
-                OpenTerminal {
-                    working_directory,
-                }
-                .boxed_clone(),
-                cx,
-            );
+            window.dispatch_action(OpenTerminal { working_directory }.boxed_clone(), cx);
         }
     }
 
@@ -6708,6 +6742,7 @@ impl Editor {
 
         let old_name = rename.old_name;
         let new_name = rename.editor.read(cx).text(cx);
+        let ui_language = localization::current_language(cx);
 
         let rename = self.semantics_provider.as_ref()?.perform_rename(
             &buffer,
@@ -6722,7 +6757,14 @@ impl Editor {
                 &editor,
                 workspace,
                 project_transaction,
-                format!("Rename: {} → {}", old_name, new_name),
+                match ui_language {
+                    localization::UiLanguage::ChineseSimplified => {
+                        format!("重命名：{} → {}", old_name, new_name)
+                    }
+                    localization::UiLanguage::English => {
+                        format!("Rename: {} → {}", old_name, new_name)
+                    }
+                },
                 cx,
             )
             .await?;
@@ -7558,7 +7600,14 @@ impl Editor {
                 Self::open_locations_in_multibuffer(
                     workspace,
                     locations,
-                    format!("Selections for '{title}'"),
+                    match localization::current_language(cx) {
+                        localization::UiLanguage::ChineseSimplified => {
+                            format!("“{title}”的选区")
+                        }
+                        localization::UiLanguage::English => {
+                            format!("Selections for '{title}'")
+                        }
+                    },
                     false,
                     false,
                     MultibufferSelectionMode::All,
@@ -8907,11 +8956,7 @@ impl Editor {
                 vim_mode,
             );
         } else {
-            telemetry::event!(
-                event_type,
-                file_extension,
-                vim_mode,
-            );
+            telemetry::event!(event_type, file_extension, vim_mode,);
         };
     }
 
@@ -10370,7 +10415,8 @@ impl Focusable for Editor {
 }
 
 impl Render for Editor {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.refresh_placeholder_text(window, cx);
         EditorElement::new(&cx.entity(), self.create_style(cx))
     }
 }
@@ -10467,6 +10513,17 @@ impl ui_input::ErasedEditor for ErasedEditorImpl {
     fn set_placeholder_text(&self, text: &str, window: &mut Window, cx: &mut App) {
         self.0.update(cx, |this, cx| {
             this.set_placeholder_text(text, window, cx);
+        });
+    }
+
+    fn set_localized_placeholder_text(
+        &self,
+        text: &'static str,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        self.0.update(cx, |this, cx| {
+            this.set_localized_placeholder_text(text, window, cx);
         });
     }
 

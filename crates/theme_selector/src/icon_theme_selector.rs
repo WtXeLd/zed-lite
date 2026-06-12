@@ -166,6 +166,10 @@ impl PickerDelegate for IconThemeSelectorDelegate {
         "Select Icon Theme...".into()
     }
 
+    fn localized_placeholder_text(&self) -> Option<&'static str> {
+        Some("Select Icon Theme...")
+    }
+
     fn match_count(&self) -> usize {
         self.matches.len()
     }
@@ -330,7 +334,7 @@ impl PickerDelegate for IconThemeSelectorDelegate {
                 .border_t_1()
                 .border_color(cx.theme().colors().border_variant)
                 .child(
-                    Button::new("docs", "View Icon Theme Docs")
+                    Button::localized("docs", "View Icon Theme Docs")
                         .end_icon(
                             Icon::new(IconName::ArrowUpRight)
                                 .size(IconSize::Small)
@@ -341,7 +345,7 @@ impl PickerDelegate for IconThemeSelectorDelegate {
                         }),
                 )
                 .child(
-                    Button::new("more-icon-themes", "Install Icon Themes").on_click(
+                    Button::localized("more-icon-themes", "Install Icon Themes").on_click(
                         move |_event, window, cx| {
                             window.dispatch_action(
                                 Box::new(Extensions {

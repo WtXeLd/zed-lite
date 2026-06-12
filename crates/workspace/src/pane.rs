@@ -1994,9 +1994,13 @@ impl Pane {
                     let detail = Self::file_names_for_prompt(&mut dirty_items.iter(), cx);
                     window.prompt(
                         PromptLevel::Warning,
-                        "Do you want to save changes to the following files?",
+                        &localization::t(cx, "Do you want to save changes to the following files?"),
                         Some(&detail),
-                        &["Save all", "Discard all", "Cancel"],
+                        &[
+                            localization::prompt_button(cx, "Save all"),
+                            localization::prompt_button(cx, "Discard all"),
+                            localization::prompt_button(cx, "Cancel"),
+                        ],
                         cx,
                     )
                 })?;
@@ -2036,9 +2040,19 @@ impl Pane {
                                 );
                                 window.prompt(
                                     PromptLevel::Warning,
-                                    &format!("Unable to save file: {}", &err),
+                                    &match localization::current_language(cx) {
+                                        localization::UiLanguage::ChineseSimplified => {
+                                            format!("无法保存文件：{}", &err)
+                                        }
+                                        localization::UiLanguage::English => {
+                                            format!("Unable to save file: {}", &err)
+                                        }
+                                    },
                                     Some(&detail),
-                                    &["Close Without Saving", "Cancel"],
+                                    &[
+                                        localization::prompt_button(cx, "Close Without Saving"),
+                                        localization::prompt_button(cx, "Cancel"),
+                                    ],
                                     cx,
                                 )
                             })?;
@@ -2306,9 +2320,13 @@ impl Pane {
                     pane.activate_item(item_ix, true, true, window, cx);
                     window.prompt(
                         PromptLevel::Warning,
-                        DELETED_MESSAGE,
+                        &localization::t(cx, DELETED_MESSAGE),
                         None,
-                        &["Save", "Close", "Cancel"],
+                        &[
+                            localization::prompt_button(cx, "Save"),
+                            localization::prompt_button(cx, "Close"),
+                            localization::prompt_button(cx, "Cancel"),
+                        ],
                         cx,
                     )
                 })?;
@@ -2341,9 +2359,13 @@ impl Pane {
                     pane.activate_item(item_ix, true, true, window, cx);
                     window.prompt(
                         PromptLevel::Warning,
-                        CONFLICT_MESSAGE,
+                        &localization::t(cx, CONFLICT_MESSAGE),
                         None,
-                        &["Overwrite", "Discard", "Cancel"],
+                        &[
+                            localization::prompt_button(cx, "Overwrite"),
+                            localization::prompt_button(cx, "Discard"),
+                            localization::prompt_button(cx, "Cancel"),
+                        ],
                         cx,
                     )
                 })?;
@@ -2386,7 +2408,11 @@ impl Pane {
                                 PromptLevel::Warning,
                                 &prompt,
                                 None,
-                                &["Save", "Don't Save", "Cancel"],
+                                &[
+                                    localization::prompt_button(cx, "Save"),
+                                    localization::prompt_button(cx, "Don't Save"),
+                                    localization::prompt_button(cx, "Cancel"),
+                                ],
                                 cx,
                             ))
                         } else {
@@ -2868,14 +2894,19 @@ impl Pane {
                 .disabled(!toggleable)
                 .tooltip(move |_, cx| {
                     if toggleable {
-                        Tooltip::with_meta(
+                        Tooltip::with_localized_meta(
                             "Unlock File",
                             None,
                             "This will make this file editable",
                             cx,
                         )
                     } else {
-                        Tooltip::with_meta("Locked File", None, "This file is read-only", cx)
+                        Tooltip::with_localized_meta(
+                            "Locked File",
+                            None,
+                            "This file is read-only",
+                            cx,
+                        )
                     }
                 })
                 .on_click(cx.listener(move |pane, _, window, cx| {
@@ -3286,7 +3317,7 @@ impl Pane {
                             menu = menu
                                 .separator()
                                 .when_some(entry_abs_path, |menu, abs_path| {
-                                    menu.entry(
+                                    menu.entry_localized(
                                         "Copy Path",
                                         Some(Box::new(zed_actions::workspace::CopyPath)),
                                         window.handler_for(&pane, move |_, _, cx| {
@@ -3297,7 +3328,7 @@ impl Pane {
                                     )
                                 })
                                 .when_some(relative_path, |menu, relative_path| {
-                                    menu.entry(
+                                    menu.entry_localized(
                                         "Copy Relative Path",
                                         Some(Box::new(zed_actions::workspace::CopyRelativePath)),
                                         window.handler_for(&pane, move |this, _, cx| {
@@ -3313,7 +3344,7 @@ impl Pane {
                                     )
                                 })
                                 .when_some(reveal_path, |menu, reveal_path| {
-                                    menu.separator().entry(
+                                    menu.separator().entry_localized(
                                         ui::utils::reveal_in_file_manager_label(false),
                                         Some(Box::new(zed_actions::editor::RevealInFileManager)),
                                         window.handler_for(&pane, move |pane, _, cx| {
@@ -3329,7 +3360,7 @@ impl Pane {
                                 })
                                 .map(pin_tab_entries)
                                 .when(visible_in_project_panel, |menu| {
-                                    menu.entry(
+                                    menu.entry_localized(
                                         "Reveal In Project Panel",
                                         Some(Box::new(RevealInProjectPanel::default())),
                                         window.handler_for(&pane, move |pane, _, cx| {
@@ -3344,7 +3375,7 @@ impl Pane {
                                     )
                                 })
                                 .when_some(parent_abs_path, |menu, parent_abs_path| {
-                                    menu.entry(
+                                    menu.entry_localized(
                                         "Open in Terminal",
                                         Some(Box::new(OpenInTerminal)),
                                         window.handler_for(&pane, move |_, window, cx| {
@@ -3488,7 +3519,9 @@ impl Pane {
         cx: &mut Context<Pane>,
     ) -> TabBar {
         let reserve_window_controls_space = self.workspace.upgrade().is_some_and(|workspace| {
-            workspace.read(cx).should_reserve_window_controls_space_for_pane(&cx.entity(), cx)
+            workspace
+                .read(cx)
+                .should_reserve_window_controls_space_for_pane(&cx.entity(), cx)
         });
 
         tab_bar
@@ -4192,20 +4225,26 @@ fn default_render_tab_bar_buttons(
             PopoverMenu::new("pane-tab-bar-popover-menu")
                 .trigger_with_tooltip(
                     IconButton::new("plus", IconName::Plus).icon_size(IconSize::Small),
-                    Tooltip::text("New..."),
+                    Tooltip::localized_text("New..."),
                 )
                 .anchor(Anchor::TopRight)
                 .with_handle(pane.new_item_context_menu_handle.clone())
                 .menu(move |window, cx| {
                     Some(ContextMenu::build(window, cx, |menu, _, _| {
-                        menu.action("New File", NewFile.boxed_clone())
-                            .action("Open File", ToggleFileFinder::default().boxed_clone())
+                        menu.action_localized("New File", NewFile.boxed_clone())
+                            .action_localized(
+                                "Open File",
+                                ToggleFileFinder::default().boxed_clone(),
+                            )
                             .separator()
-                            .action("Search Project", DeploySearch::default().boxed_clone())
-                            .action("Search Symbols", ToggleProjectSymbols.boxed_clone())
+                            .action_localized(
+                                "Search Project",
+                                DeploySearch::default().boxed_clone(),
+                            )
+                            .action_localized("Search Symbols", ToggleProjectSymbols.boxed_clone())
                             .separator()
-                            .action("New Terminal", NewTerminal::default().boxed_clone())
-                            .action(
+                            .action_localized("New Terminal", NewTerminal::default().boxed_clone())
+                            .action_localized(
                                 "New Center Terminal",
                                 NewCenterTerminal::default().boxed_clone(),
                             )
@@ -4218,7 +4257,7 @@ fn default_render_tab_bar_buttons(
                     IconButton::new("split", IconName::Split)
                         .icon_size(IconSize::Small)
                         .disabled(!can_clone && !can_split_move),
-                    Tooltip::text("Split Pane"),
+                    Tooltip::localized_text("Split Pane"),
                 )
                 .anchor(Anchor::TopRight)
                 .with_handle(pane.split_item_context_menu_handle.clone())
@@ -4226,15 +4265,18 @@ fn default_render_tab_bar_buttons(
                     ContextMenu::build(window, cx, |menu, _, _| {
                         let mode = SplitMode::MovePane;
                         if can_split_move {
-                            menu.action("Split Right", SplitRight { mode }.boxed_clone())
-                                .action("Split Left", SplitLeft { mode }.boxed_clone())
-                                .action("Split Up", SplitUp { mode }.boxed_clone())
-                                .action("Split Down", SplitDown { mode }.boxed_clone())
+                            menu.action_localized("Split Right", SplitRight { mode }.boxed_clone())
+                                .action_localized("Split Left", SplitLeft { mode }.boxed_clone())
+                                .action_localized("Split Up", SplitUp { mode }.boxed_clone())
+                                .action_localized("Split Down", SplitDown { mode }.boxed_clone())
                         } else {
-                            menu.action("Split Right", SplitRight::default().boxed_clone())
-                                .action("Split Left", SplitLeft::default().boxed_clone())
-                                .action("Split Up", SplitUp::default().boxed_clone())
-                                .action("Split Down", SplitDown::default().boxed_clone())
+                            menu.action_localized(
+                                "Split Right",
+                                SplitRight::default().boxed_clone(),
+                            )
+                            .action_localized("Split Left", SplitLeft::default().boxed_clone())
+                            .action_localized("Split Up", SplitUp::default().boxed_clone())
+                            .action_localized("Split Down", SplitDown::default().boxed_clone())
                         }
                     })
                     .into()

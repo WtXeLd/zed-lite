@@ -847,7 +847,7 @@ impl Render for HighlightsTreeView {
                             if self.editor.is_some() {
                                 let has_any = !self.cached_entries.is_empty();
                                 if has_any {
-                                    this.child(Label::new("All highlights are filtered out"))
+                                    this.child(Label::localized("All highlights are filtered out"))
                                         .child(
                                             Label::new(
                                                 "Enable text, syntax, or semantic highlights in the toolbar",
@@ -855,7 +855,7 @@ impl Render for HighlightsTreeView {
                                             .size(LabelSize::Small),
                                         )
                                 } else {
-                                    this.child(Label::new("No highlights found")).child(
+                                    this.child(Label::localized("No highlights found")).child(
                                         Label::new(
                                             "The editor has no text, syntax, or semantic token highlights",
                                         )
@@ -863,8 +863,8 @@ impl Render for HighlightsTreeView {
                                     )
                                 }
                             } else {
-                                this.child(Label::new("Not attached to an editor")).child(
-                                    Label::new("Focus an editor to show highlights")
+                                this.child(Label::localized("Not attached to an editor")).child(
+                                    Label::localized("Focus an editor to show highlights")
                                         .size(LabelSize::Small),
                                 )
                             }
@@ -987,7 +987,7 @@ impl HighlightsTreeToolbarItemView {
                     .icon_size(IconSize::Small)
                     .style(ButtonStyle::Subtle)
                     .toggle_state(self.toggle_settings_handle.is_deployed()),
-                Tooltip::text("Highlights Settings"),
+                Tooltip::localized_text("Highlights Settings"),
             )
             .anchor(gpui::Anchor::TopRight)
             .with_handle(self.toggle_settings_handle.clone())

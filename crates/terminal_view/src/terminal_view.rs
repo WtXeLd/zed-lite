@@ -496,17 +496,17 @@ impl TerminalView {
     ) {
         let context_menu = ContextMenu::build(window, cx, |menu, _, _| {
             menu.context(self.focus_handle.clone())
-                .action("New Terminal", Box::new(NewTerminal::default()))
+                .action_localized("New Terminal", Box::new(NewTerminal::default()))
                 .action(
                     "New Center Terminal",
                     Box::new(NewCenterTerminal::default()),
                 )
                 .separator()
-                .action("Copy", Box::new(Copy))
-                .action("Paste", Box::new(Paste))
-                .action("Paste Text", Box::new(PasteText))
-                .action("Select All", Box::new(SelectAll))
-                .action("Clear", Box::new(Clear))
+                .action_localized("Copy", Box::new(Copy))
+                .action_localized("Paste", Box::new(Paste))
+                .action_localized("Paste Text", Box::new(PasteText))
+                .action_localized("Select All", Box::new(SelectAll))
+                .action_localized("Clear", Box::new(Clear))
                 .separator()
                 .action(
                     "Close Terminal Tab",
@@ -1038,7 +1038,9 @@ impl TerminalView {
                 .size(ButtonSize::Compact)
                 .icon_color(Color::Default)
                 .shape(ui::IconButtonShape::Square)
-                .tooltip(move |_window, cx| Tooltip::for_action("Rerun task", &RerunTask, cx))
+                .tooltip(move |_window, cx| {
+                    Tooltip::for_localized_action("Rerun task", &RerunTask, cx)
+                })
                 .on_click(move |_, window, cx| {
                     window.dispatch_action(Box::new(terminal_rerun_override(&task_id)), cx);
                 }),

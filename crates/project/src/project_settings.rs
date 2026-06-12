@@ -15,17 +15,11 @@ pub use settings::BinarySettings;
 pub use settings::DirenvSettings;
 pub use settings::LspSettings;
 use settings::{
-    EditorconfigEvent, InvalidSettingsError, LocalSettingsKind, LocalSettingsPath,
-    RegisterSetting, SemanticTokenRules, Settings, SettingsLocation, SettingsStore,
-    parse_json_with_comments, watch_config_file,
+    EditorconfigEvent, InvalidSettingsError, LocalSettingsKind, LocalSettingsPath, RegisterSetting,
+    SemanticTokenRules, Settings, SettingsLocation, SettingsStore, parse_json_with_comments,
+    watch_config_file,
 };
-use std::{
-    cell::OnceCell,
-    collections::BTreeMap,
-    path::PathBuf,
-    sync::Arc,
-    time::Duration,
-};
+use std::{cell::OnceCell, collections::BTreeMap, path::PathBuf, sync::Arc, time::Duration};
 use task::{TaskTemplates, VsCodeTaskFile};
 use util::{ResultExt, rel_path::RelPath};
 use worktree::{PathChange, UpdatedEntriesSet, Worktree, WorktreeId};
@@ -794,7 +788,9 @@ impl SettingsObserver {
                         Some(
                             async move {
                                 let content = fs.load(&abs_path).await?;
-                                if abs_path.ends_with(local_vscode_tasks_file_relative_path().as_std_path()) {
+                                if abs_path.ends_with(
+                                    local_vscode_tasks_file_relative_path().as_std_path(),
+                                ) {
                                     let vscode_tasks =
                                         parse_json_with_comments::<VsCodeTaskFile>(&content)
                                             .with_context(|| {

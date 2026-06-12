@@ -15,14 +15,21 @@ pub(crate) enum Head {
 
 impl Head {
     pub fn editor<V: 'static>(
-        placeholder_text: Arc<str>,
+        placeholder_text: localization::LocalizableString,
         mut edit_handler: impl FnMut(&mut V, &ErasedEditorEvent, &mut Window, &mut Context<V>) + 'static,
         window: &mut Window,
         cx: &mut Context<V>,
     ) -> Self {
         let editor = (ui_input::ERASED_EDITOR_FACTORY.get().unwrap())(window, cx);
 
-        editor.set_placeholder_text(placeholder_text.as_ref(), window, cx);
+        match placeholder_text {
+            localization::LocalizableString::User(placeholder_text) => {
+                editor.set_placeholder_text(placeholder_text.as_ref(), window, cx);
+            }
+            localization::LocalizableString::Ui(placeholder_text) => {
+                editor.set_localized_placeholder_text(placeholder_text, window, cx);
+            }
+        }
         let this = cx.weak_entity();
         editor
             .subscribe(

@@ -10,6 +10,7 @@ use gpui::{
     InteractiveElement, IntoElement, Modifiers, ModifiersChangedEvent, ParentElement, PromptLevel,
     Render, SharedString, Styled, Subscription, Task, TaskExt, WeakEntity, Window, actions, rems,
 };
+use localization::{UiLanguage, current_language};
 use picker::{Picker, PickerDelegate, PickerEditorPosition};
 use project::git_store::{Repository, RepositoryEvent};
 use project::project_settings::ProjectSettings;
@@ -670,7 +671,7 @@ fn delete_branch_command(is_remote: bool, branch_name: &str, force: bool) -> Str
 
 struct BranchDeleteForceDeletePrompt {
     required_error_substrings: &'static [&'static str],
-    message: fn(&str) -> String,
+    message: fn(&str, UiLanguage) -> String,
 }
 
 impl BranchDeleteForceDeletePrompt {
@@ -687,8 +688,15 @@ const BRANCH_DELETE_FORCE_DELETE_PROMPTS: &[BranchDeleteForceDeletePrompt] =
         message: unmerged_branch_force_delete_prompt,
     }];
 
-fn unmerged_branch_force_delete_prompt(branch_name: &str) -> String {
-    format!("Branch \"{branch_name}\" is not fully merged. Force delete it?")
+fn unmerged_branch_force_delete_prompt(branch_name: &str, language: UiLanguage) -> String {
+    match language {
+        UiLanguage::ChineseSimplified => {
+            format!("分支 \"{branch_name}\" 尚未完全合并。要强制删除吗？")
+        }
+        UiLanguage::English => {
+            format!("Branch \"{branch_name}\" is not fully merged. Force delete it?")
+        }
+    }
 }
 
 // Git only reports these cases via localized stderr, so this best-effort check
@@ -696,12 +704,13 @@ fn unmerged_branch_force_delete_prompt(branch_name: &str) -> String {
 fn force_delete_prompt_for_branch_delete_error(
     error: &anyhow::Error,
     branch_name: &str,
+    language: UiLanguage,
 ) -> Option<String> {
     let normalized_error_message = error.to_string().to_lowercase();
     BRANCH_DELETE_FORCE_DELETE_PROMPTS
         .iter()
         .find(|prompt| prompt.matches(&normalized_error_message))
-        .map(|prompt| (prompt.message)(branch_name))
+        .map(|prompt| (prompt.message)(branch_name, language))
 }
 
 struct DeleteBranchTooltip {
@@ -967,20 +976,32 @@ impl BranchListDelegate {
                         log::error!("Failed to delete branch: {error}");
                     }
 
-                    let force_delete_prompt = (!force)
-                        .then(|| force_delete_prompt_for_branch_delete_error(&error, entry.name()))
-                        .flatten();
-
-                    if let Some(prompt_message) = force_delete_prompt {
+                    if !force {
                         let answer = cx.update(|window, cx| {
-                            window.prompt(
-                                PromptLevel::Warning,
-                                &prompt_message,
-                                None,
-                                &["Force Delete", "Cancel"],
-                                cx,
-                            )
+                            let Some(prompt_message) = force_delete_prompt_for_branch_delete_error(
+                                &error,
+                                entry.name(),
+                                current_language(cx),
+                            ) else {
+                                return None;
+                            };
+                            window
+                                .prompt(
+                                    PromptLevel::Warning,
+                                    &prompt_message,
+                                    None,
+                                    &[
+                                        localization::prompt_button(cx, "Force Delete"),
+                                        localization::prompt_button(cx, "Cancel"),
+                                    ],
+                                    cx,
+                                )
+                                .into()
                         })?;
+
+                        let Some(answer) = answer else {
+                            return Ok(());
+                        };
 
                         if answer.await != Ok(0) {
                             return Ok(());
@@ -1061,11 +1082,29 @@ impl PickerDelegate for BranchListDelegate {
         .into()
     }
 
+    fn localized_placeholder_text(&self) -> Option<&'static str> {
+        Some(match self.state {
+            PickerState::List | PickerState::NewRemote | PickerState::NewBranch => {
+                if self.is_select_only() {
+                    "Select branch…"
+                } else {
+                    "Switch branch…"
+                }
+            }
+            PickerState::CreateRemote(_) => "Enter a name for this remote…",
+        })
+    }
+
     fn no_matches_text(&self, _window: &mut Window, _cx: &mut App) -> Option<SharedString> {
         match self.state {
-            PickerState::CreateRemote(_) => {
-                Some(SharedString::new_static("Remote name can't be empty"))
-            }
+            PickerState::CreateRemote(_) => None,
+            _ => None,
+        }
+    }
+
+    fn localized_no_matches_text(&self) -> Option<&'static str> {
+        match self.state {
+            PickerState::CreateRemote(_) => Some("Remote name can't be empty"),
             _ => None,
         }
     }
@@ -1458,18 +1497,30 @@ impl PickerDelegate for BranchListDelegate {
         };
 
         let entry_title = match entry {
-            Entry::NewUrl { .. } => Label::new("Create Remote Repository")
+            Entry::NewUrl { .. } => Label::localized("Create Remote Repository")
                 .single_line()
                 .truncate()
                 .into_any_element(),
-            Entry::NewBranch { name } => Label::new(format!("Create Branch: \"{name}\"…"))
-                .single_line()
-                .truncate()
-                .into_any_element(),
-            Entry::NewRemoteName { name, .. } => Label::new(format!("Create Remote: \"{name}\""))
-                .single_line()
-                .truncate()
-                .into_any_element(),
+            Entry::NewBranch { name } => {
+                let label = match current_language(cx) {
+                    UiLanguage::ChineseSimplified => format!("创建分支：“{name}”…"),
+                    UiLanguage::English => format!("Create Branch: \"{name}\"…"),
+                };
+                Label::new(label)
+                    .single_line()
+                    .truncate()
+                    .into_any_element()
+            }
+            Entry::NewRemoteName { name, .. } => {
+                let label = match current_language(cx) {
+                    UiLanguage::ChineseSimplified => format!("创建远程：“{name}”"),
+                    UiLanguage::English => format!("Create Remote: \"{name}\""),
+                };
+                Label::new(label)
+                    .single_line()
+                    .truncate()
+                    .into_any_element()
+            }
             Entry::Branch { branch, positions } => {
                 HighlightedLabel::new(branch.name().to_string(), positions.clone())
                     .single_line()
@@ -1527,7 +1578,13 @@ impl PickerDelegate for BranchListDelegate {
         };
 
         let create_from_default_button = self.default_branch.as_ref().map(|default_branch| {
-            let tooltip_label: SharedString = format!("Create New From: {default_branch}").into();
+            let tooltip_label: SharedString = match localization::current_language(cx) {
+                localization::UiLanguage::ChineseSimplified => {
+                    format!("基于 {default_branch} 新建")
+                }
+                localization::UiLanguage::English => format!("Create New From: {default_branch}"),
+            }
+            .into();
             let focus_handle = self.focus_handle.clone();
 
             IconButton::new("create_from_default", IconName::GitBranchPlus)
@@ -1572,9 +1629,25 @@ impl PickerDelegate for BranchListDelegate {
                                 .child(entry_title)
                                 .child({
                                     let message = match entry {
-                                        Entry::NewUrl { url } => format!("Based off {url}"),
+                                        Entry::NewUrl { url } => {
+                                            match localization::current_language(cx) {
+                                                localization::UiLanguage::ChineseSimplified => {
+                                                    format!("基于 {url}")
+                                                }
+                                                localization::UiLanguage::English => {
+                                                    format!("Based off {url}")
+                                                }
+                                            }
+                                        }
                                         Entry::NewRemoteName { url, .. } => {
-                                            format!("Based off {url}")
+                                            match localization::current_language(cx) {
+                                                localization::UiLanguage::ChineseSimplified => {
+                                                    format!("基于 {url}")
+                                                }
+                                                localization::UiLanguage::English => {
+                                                    format!("Based off {url}")
+                                                }
+                                            }
                                         }
                                         Entry::NewBranch { .. } => {
                                             if let Some(current_branch) =
@@ -1582,9 +1655,17 @@ impl PickerDelegate for BranchListDelegate {
                                                     repo.read(cx).branch.as_ref().map(|b| b.name())
                                                 })
                                             {
-                                                format!("Based off {}", current_branch)
+                                                match localization::current_language(cx) {
+                                                    localization::UiLanguage::ChineseSimplified => {
+                                                        format!("基于 {}", current_branch)
+                                                    }
+                                                    localization::UiLanguage::English => {
+                                                        format!("Based off {}", current_branch)
+                                                    }
+                                                }
                                             } else {
-                                                "Based off the current branch".to_string()
+                                                localization::t(cx, "Based off the current branch")
+                                                    .to_string()
                                             }
                                         }
                                         Entry::Branch { .. } => String::new(),
@@ -1638,7 +1719,7 @@ impl PickerDelegate for BranchListDelegate {
                                             })
                                             .when(!has_commit, |this| {
                                                 this.child(
-                                                    Label::new("No commits found")
+                                                    Label::localized("No commits found")
                                                         .color(Color::Muted)
                                                         .size(LabelSize::Small),
                                                 )
@@ -1665,14 +1746,14 @@ impl PickerDelegate for BranchListDelegate {
                                                     .child(Label::new(branch_name.clone()))
                                                     .when(is_select_only && is_checked, |this| {
                                                         this.child(
-                                                            Label::new("Selected Branch")
+                                                            Label::localized("Selected Branch")
                                                                 .size(LabelSize::Small)
                                                                 .color(Color::Muted),
                                                         )
                                                     })
                                                     .when(is_head, |this| {
                                                         this.child(
-                                                            Label::new("Current Branch")
+                                                            Label::localized("Current Branch")
                                                                 .size(LabelSize::Small)
                                                                 .color(Color::Muted),
                                                         )
@@ -1741,7 +1822,14 @@ impl PickerDelegate for BranchListDelegate {
                     .as_ref()
                     .filter(|_| matches!(selected_entry, Some(Entry::NewBranch { .. })))
                     .map(|default_branch| {
-                        let button_label = format!("Create New From: {default_branch}");
+                        let button_label = match localization::current_language(cx) {
+                            localization::UiLanguage::ChineseSimplified => {
+                                format!("基于 {default_branch} 新建")
+                            }
+                            localization::UiLanguage::English => {
+                                format!("Create New From: {default_branch}")
+                            }
+                        };
 
                         Button::new("branch-from-default", button_label)
                             .key_binding(
@@ -1765,7 +1853,7 @@ impl PickerDelegate for BranchListDelegate {
                             .is_some_and(|branch| branch.is_head),
                         |this| {
                             this.child(
-                                Button::new("delete-branch", "Delete")
+                                Button::localized("delete-branch", "Delete")
                                     .key_binding(
                                         KeyBinding::for_action_in(
                                             &branch_picker::DeleteBranch,
@@ -1784,7 +1872,7 @@ impl PickerDelegate for BranchListDelegate {
                         },
                     )
                     .child(
-                        Button::new("switch_branch", "Switch")
+                        Button::localized("switch_branch", "Switch")
                             .key_binding(
                                 KeyBinding::for_action_in(&menu::Confirm, &focus_handle, cx)
                                     .map(|kb| kb.size(rems_from_px(12.))),
@@ -1802,7 +1890,7 @@ impl PickerDelegate for BranchListDelegate {
                                     branch_from_default_button,
                                     |this, button| {
                                         this.child(button).child(
-                                            Button::new("create", "Create")
+                                            Button::localized("create", "Create")
                                                 .key_binding(
                                                     KeyBinding::for_action_in(
                                                         &menu::Confirm,
@@ -1854,7 +1942,14 @@ impl PickerDelegate for BranchListDelegate {
             PickerState::NewBranch => {
                 let branch_from_default_button =
                     self.default_branch.as_ref().map(|default_branch| {
-                        let button_label = format!("Create New From: {default_branch}");
+                        let button_label = match localization::current_language(cx) {
+                            localization::UiLanguage::ChineseSimplified => {
+                                format!("基于 {default_branch} 新建")
+                            }
+                            localization::UiLanguage::English => {
+                                format!("Create New From: {default_branch}")
+                            }
+                        };
 
                         Button::new("branch-from-default", button_label)
                             .key_binding(
@@ -1878,7 +1973,7 @@ impl PickerDelegate for BranchListDelegate {
                             this.child(button)
                         })
                         .child(
-                            Button::new("create-new-branch", "Create")
+                            Button::localized("create-new-branch", "Create")
                                 .key_binding(
                                     KeyBinding::for_action_in(&menu::Confirm, &focus_handle, cx)
                                         .map(|kb| kb.size(rems_from_px(12.))),
@@ -1894,7 +1989,7 @@ impl PickerDelegate for BranchListDelegate {
                 footer_container()
                     .justify_end()
                     .child(
-                        Button::new("confirm-create-remote", "Confirm")
+                        Button::localized("confirm-create-remote", "Confirm")
                             .key_binding(
                                 KeyBinding::for_action_in(&menu::Confirm, &focus_handle, cx)
                                     .map(|kb| kb.size(rems_from_px(12.))),

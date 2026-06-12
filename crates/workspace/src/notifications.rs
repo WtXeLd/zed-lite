@@ -163,7 +163,11 @@ impl Workspace {
         E: std::fmt::Debug + std::fmt::Display,
     {
         self.show_notification(workspace_error_notification_id(), cx, |cx| {
-            cx.new(|cx| ErrorMessagePrompt::new(format!("Error: {err}"), cx))
+            let message = match localization::current_language(cx) {
+                localization::UiLanguage::ChineseSimplified => format!("错误：{err}"),
+                localization::UiLanguage::English => format!("Error: {err}"),
+            };
+            cx.new(|cx| ErrorMessagePrompt::new(message, cx))
         });
     }
 
@@ -197,13 +201,17 @@ impl Workspace {
             cx.new(|cx| match toast.on_click.as_ref() {
                 Some((click_msg, on_click)) => {
                     let on_click = on_click.clone();
-                    simple_message_notification::MessageNotification::new(toast.msg.clone(), cx)
-                        .primary_message(click_msg.clone())
-                        .primary_on_click(move |window, cx| on_click(window, cx))
+                    simple_message_notification::MessageNotification::new(
+                        toast.msg.clone().resolve(cx),
+                        cx,
+                    )
+                    .primary_message(click_msg.clone().resolve(cx))
+                    .primary_on_click(move |window, cx| on_click(window, cx))
                 }
-                None => {
-                    simple_message_notification::MessageNotification::new(toast.msg.clone(), cx)
-                }
+                None => simple_message_notification::MessageNotification::new(
+                    toast.msg.clone().resolve(cx),
+                    cx,
+                ),
             })
         });
         if toast.autohide {
@@ -665,21 +673,25 @@ impl RenderOnce for NotificationFrame {
                                 IconButton::new(close_id, close_icon)
                                     .tooltip(move |_window, cx| {
                                         if suppress {
-                                            Tooltip::with_meta(
+                                            Tooltip::with_localized_meta(
                                                 "Suppress",
                                                 Some(&SuppressNotification),
                                                 "Click to Close",
                                                 cx,
                                             )
                                         } else if show_suppress_button {
-                                            Tooltip::with_meta(
+                                            Tooltip::with_localized_meta(
                                                 "Close",
                                                 Some(&menu::Cancel),
                                                 "Shift-click to Suppress",
                                                 cx,
                                             )
                                         } else {
-                                            Tooltip::for_action("Close", &menu::Cancel, cx)
+                                            Tooltip::for_localized_action(
+                                                "Close",
+                                                &menu::Cancel,
+                                                cx,
+                                            )
                                         }
                                     })
                                     .on_click({
@@ -1163,7 +1175,10 @@ where
         match self {
             Ok(value) => Some(value),
             Err(err) => {
-                let message: SharedString = format!("Error: {err}").into();
+                let message: SharedString = match localization::current_language(cx) {
+                    localization::UiLanguage::ChineseSimplified => format!("错误：{err}").into(),
+                    localization::UiLanguage::English => format!("Error: {err}").into(),
+                };
                 log::error!("Showing error notification in app: {message}");
                 show_app_notification(workspace_error_notification_id(), cx, {
                     move |cx| {
@@ -1248,7 +1263,13 @@ where
                         display.push('.');
                     }
                     let detail = f(err, window, cx).unwrap_or(display);
-                    window.prompt(PromptLevel::Critical, &msg, Some(&detail), &["Ok"], cx)
+                    window.prompt(
+                        PromptLevel::Critical,
+                        localization::t_shared(cx, msg.clone().into()).as_ref(),
+                        Some(&detail),
+                        &[localization::prompt_button(cx, "Ok")],
+                        cx,
+                    )
                 }) {
                     prompt.await.ok();
                 }

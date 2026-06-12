@@ -4,7 +4,7 @@ use gpui::{IntoElement, ParentElement, SharedString};
 
 #[derive(IntoElement, RegisterComponent)]
 pub struct ListBulletItem {
-    label: SharedString,
+    label: localization::LocalizableString,
     label_color: Option<Color>,
     children: Vec<AnyElement>,
 }
@@ -12,7 +12,15 @@ pub struct ListBulletItem {
 impl ListBulletItem {
     pub fn new(label: impl Into<SharedString>) -> Self {
         Self {
-            label: label.into(),
+            label: localization::LocalizableString::User(label.into()),
+            label_color: None,
+            children: Vec::new(),
+        }
+    }
+
+    pub fn localized(label: &'static str) -> Self {
+        Self {
+            label: localization::ui(label),
             label_color: None,
             children: Vec::new(),
         }
@@ -31,7 +39,7 @@ impl ParentElement for ListBulletItem {
 }
 
 impl RenderOnce for ListBulletItem {
-    fn render(self, window: &mut Window, _cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let line_height = window.line_height() * 0.85;
 
         ListItem::new("list-item")
@@ -55,7 +63,7 @@ impl RenderOnce for ListBulletItem {
                         } else {
                             this.child(
                                 div().w_full().min_w_0().child(
-                                    Label::new(self.label)
+                                    Label::new(self.label.resolve(cx))
                                         .color(self.label_color.unwrap_or(Color::Default)),
                                 ),
                             )

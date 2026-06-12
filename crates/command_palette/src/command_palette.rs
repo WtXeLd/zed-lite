@@ -379,6 +379,10 @@ impl PickerDelegate for CommandPaletteDelegate {
         "Execute a command...".into()
     }
 
+    fn localized_placeholder_text(&self) -> Option<&'static str> {
+        Some("Execute a command...")
+    }
+
     fn select_history(
         &mut self,
         direction: Direction,
@@ -636,7 +640,7 @@ impl PickerDelegate for CommandPaletteDelegate {
 
         let focus_handle = &self.previous_focus_handle;
         let keybinding_buttons = if keybind.has_binding(window) {
-            Button::new("change", "Change Keybinding…")
+            Button::localized("change", "Change Keybinding…")
                 .key_binding(
                     KeyBinding::for_action_in(&menu::SecondaryConfirm, focus_handle, cx)
                         .map(|kb| kb.size(rems_from_px(12.))),
@@ -645,7 +649,7 @@ impl PickerDelegate for CommandPaletteDelegate {
                     window.dispatch_action(menu::SecondaryConfirm.boxed_clone(), cx);
                 })
         } else {
-            Button::new("add", "Add Keybinding…")
+            Button::localized("add", "Add Keybinding…")
                 .key_binding(
                     KeyBinding::for_action_in(&menu::SecondaryConfirm, focus_handle, cx)
                         .map(|kb| kb.size(rems_from_px(12.))),
@@ -665,7 +669,7 @@ impl PickerDelegate for CommandPaletteDelegate {
                 .border_color(cx.theme().colors().border_variant)
                 .child(keybinding_buttons)
                 .child(
-                    Button::new("run-action", "Run")
+                    Button::localized("run-action", "Run")
                         .key_binding(
                             KeyBinding::for_action_in(&menu::Confirm, &focus_handle, cx)
                                 .map(|kb| kb.size(rems_from_px(12.))),

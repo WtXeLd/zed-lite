@@ -26,6 +26,7 @@ use language::{
     Bias, Buffer, BufferRow, BufferSnapshot, DiagnosticEntry, DiagnosticEntryRef, Point,
     ToTreeSitterPoint,
 };
+use localization::{UiLanguage, current_language, t};
 use project::{
     DiagnosticSummary, Project, ProjectPath,
     project_settings::{DiagnosticSeverity, ProjectSettings},
@@ -104,9 +105,9 @@ impl Render for ProjectDiagnosticsEditor {
         let child =
             if warning_count + self.summary.error_count == 0 && self.editor.read(cx).is_empty(cx) {
                 let label = if self.summary.warning_count == 0 {
-                    SharedString::new_static("No problems in workspace")
+                    t(cx, "No problems in workspace")
                 } else {
-                    SharedString::new_static("No errors in workspace")
+                    t(cx, "No errors in workspace")
                 };
                 v_flex()
                     .key_context("EmptyPane")
@@ -118,15 +119,22 @@ impl Render for ProjectDiagnosticsEditor {
                     .bg(cx.theme().colors().editor_background)
                     .child(Label::new(label).color(Color::Muted))
                     .when(self.summary.warning_count > 0, |this| {
-                        let plural_suffix = if self.summary.warning_count > 1 {
-                            "s"
-                        } else {
-                            ""
+                        let label = match current_language(cx) {
+                            UiLanguage::ChineseSimplified => {
+                                format!("显示 {} 条警告", self.summary.warning_count)
+                            }
+                            UiLanguage::English => {
+                                let plural_suffix = if self.summary.warning_count > 1 {
+                                    "s"
+                                } else {
+                                    ""
+                                };
+                                format!(
+                                    "Show {} warning{}",
+                                    self.summary.warning_count, plural_suffix
+                                )
+                            }
                         };
-                        let label = format!(
-                            "Show {} warning{}",
-                            self.summary.warning_count, plural_suffix
-                        );
                         this.child(
                             Button::new("diagnostics-show-warning-label", label).on_click(
                                 cx.listener(|this, _, window, cx| {
@@ -766,7 +774,7 @@ impl Item for ProjectDiagnosticsEditor {
                         h_flex()
                             .gap_1()
                             .child(Icon::new(IconName::Check).color(Color::Success))
-                            .child(Label::new("No problems").color(params.text_color())),
+                            .child(Label::localized("No problems").color(params.text_color())),
                     )
                 },
             )

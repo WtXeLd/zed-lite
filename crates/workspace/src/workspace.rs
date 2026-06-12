@@ -13,11 +13,11 @@ pub mod pane_group;
 pub mod path_list {
     pub use util::path_list::{PathList, SerializedPathList};
 }
+pub mod focus_follows_mouse;
 pub mod path_link;
 mod persistence;
 pub mod searchable;
 pub mod security_modal;
-pub mod focus_follows_mouse;
 mod status_bar;
 pub mod tasks;
 mod theme_preview;
@@ -31,9 +31,8 @@ pub use dock::Panel;
 pub use multi_workspace::{
     CloseWorkspaceSidebar, DraggedSidebar, FocusWorkspaceSidebar, MoveProjectToNewWindow,
     MultiWorkspace, MultiWorkspaceEvent, NextProject, PreviousProject, ProjectGroup,
-    ProjectGroupKey, SerializedProjectGroupState, Sidebar,
-    SidebarEvent, SidebarHandle, SidebarRenderState, SidebarSide, ToggleWorkspaceSidebar,
-    sidebar_side_context_menu,
+    ProjectGroupKey, SerializedProjectGroupState, Sidebar, SidebarEvent, SidebarHandle,
+    SidebarRenderState, SidebarSide, ToggleWorkspaceSidebar, sidebar_side_context_menu,
 };
 pub use path_list::{PathList, SerializedPathList};
 pub use toast_layer::{ToastAction, ToastLayer, ToastView};
@@ -91,7 +90,8 @@ use persistence::{SerializedWindowBounds, model::SerializedWorkspace};
 use postage::stream::Stream;
 use project::{
     DirectoryLister, Project, ProjectEntryId, ProjectPath, ResolvedPath, Worktree, WorktreeId,
-    WorktreeSettings, project_settings::ProjectSettings,
+    WorktreeSettings,
+    project_settings::ProjectSettings,
     toolchain_store::ToolchainStoreEvent,
     trusted_worktrees::{TrustedWorktrees, TrustedWorktreesEvent},
 };
@@ -513,16 +513,28 @@ pub enum CloseIntent {
 #[derive(Clone)]
 pub struct Toast {
     id: NotificationId,
-    msg: Cow<'static, str>,
+    msg: localization::LocalizableString,
     autohide: bool,
-    on_click: Option<(Cow<'static, str>, Arc<dyn Fn(&mut Window, &mut App)>)>,
+    on_click: Option<(
+        localization::LocalizableString,
+        Arc<dyn Fn(&mut Window, &mut App)>,
+    )>,
 }
 
 impl Toast {
     pub fn new<I: Into<Cow<'static, str>>>(id: NotificationId, msg: I) -> Self {
         Toast {
             id,
-            msg: msg.into(),
+            msg: localization::LocalizableString::User(msg.into().into_owned().into()),
+            on_click: None,
+            autohide: false,
+        }
+    }
+
+    pub fn localized(id: NotificationId, msg: &'static str) -> Self {
+        Toast {
+            id,
+            msg: localization::ui(msg),
             on_click: None,
             autohide: false,
         }
@@ -533,7 +545,18 @@ impl Toast {
         M: Into<Cow<'static, str>>,
         F: Fn(&mut Window, &mut App) + 'static,
     {
-        self.on_click = Some((message.into(), Arc::new(on_click)));
+        self.on_click = Some((
+            localization::LocalizableString::User(message.into().into_owned().into()),
+            Arc::new(on_click),
+        ));
+        self
+    }
+
+    pub fn localized_on_click<F>(mut self, message: &'static str, on_click: F) -> Self
+    where
+        F: Fn(&mut Window, &mut App) + 'static,
+    {
+        self.on_click = Some((localization::ui(message), Arc::new(on_click)));
         self
     }
 
@@ -546,7 +569,7 @@ impl Toast {
 impl PartialEq for Toast {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
-            && self.msg == other.msg
+            && self.msg.source_text() == other.msg.source_text()
             && self.on_click.is_some() == other.on_click.is_some()
     }
 }
@@ -852,7 +875,6 @@ impl ProjectItemRegistry {
         };
         open_project_item
     }
-
 }
 
 type WorkspaceItemBuilder =
@@ -3164,9 +3186,17 @@ impl Workspace {
                         );
                         window.prompt(
                             PromptLevel::Warning,
-                            "Do you want to save all changes in the following files?",
+                            localization::t(
+                                cx,
+                                "Do you want to save all changes in the following files?",
+                            )
+                            .as_ref(),
                             Some(&detail),
-                            &["Save all", "Discard all", "Cancel"],
+                            &[
+                                localization::prompt_button(cx, "Save all"),
+                                localization::prompt_button(cx, "Discard all"),
+                                localization::prompt_button(cx, "Cancel"),
+                            ],
                             cx,
                         )
                     })?;
@@ -5372,7 +5402,6 @@ impl Workspace {
 
     pub fn on_window_activation_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if window.is_window_active() {
-
             if let Some(database_id) = self.database_id {
                 let db = WorkspaceDb::global(cx);
                 cx.background_spawn(async move { db.update_timestamp(database_id).await })
@@ -6463,11 +6492,7 @@ impl Workspace {
             dock.clone().into_any_element()
         };
 
-        let mut container = div()
-            .flex()
-            .overflow_hidden()
-            .flex_none()
-            .child(dock_child);
+        let mut container = div().flex().overflow_hidden().flex_none().child(dock_child);
 
         // Apply sizing only when the dock is open. When closed the dock is still
         // included in the element tree so its focus handle remains mounted — without
@@ -6709,9 +6734,7 @@ impl Workspace {
             if has_restricted_worktrees {
                 let project = self.project().read(cx);
                 let worktree_store = project.worktree_store().downgrade();
-                self.toggle_modal(window, cx, |_, cx| {
-                    SecurityModal::new(worktree_store, cx)
-                });
+                self.toggle_modal(window, cx, |_, cx| SecurityModal::new(worktree_store, cx));
             }
         }
     }
@@ -7946,10 +7969,8 @@ pub fn open_paths(
 
             if all_metadatas.into_iter().all(|file| !file.is_dir) {
                 cx.update(|cx| {
-                    let windows = workspace_windows_for_location(
-                        &SerializedWorkspaceLocation::Local,
-                        cx,
-                    );
+                    let windows =
+                        workspace_windows_for_location(&SerializedWorkspaceLocation::Local, cx);
                     let window = cx
                         .active_window()
                         .and_then(|window| window.downcast::<MultiWorkspace>())
@@ -7981,10 +8002,8 @@ pub fn open_paths(
 
             if use_existing_window {
                 let target_window = cx.update(|cx| {
-                    let windows = workspace_windows_for_location(
-                        &SerializedWorkspaceLocation::Local,
-                        cx,
-                    );
+                    let windows =
+                        workspace_windows_for_location(&SerializedWorkspaceLocation::Local, cx);
                     let window = cx
                         .active_window()
                         .and_then(|window| window.downcast::<MultiWorkspace>())
@@ -8039,7 +8058,11 @@ pub fn open_paths(
                 });
             });
 
-            Ok(OpenResult { window: existing, workspace: target_workspace, opened_items: open_task })
+            Ok(OpenResult {
+                window: existing,
+                workspace: target_workspace,
+                opened_items: open_task,
+            })
         } else {
             let result = cx
                 .update(move |cx| {
@@ -8056,7 +8079,8 @@ pub fn open_paths(
                 .await;
 
             if let Ok(ref result) = result {
-                result.window
+                result
+                    .window
                     .update(cx, |_, window, _cx| {
                         window.activate_window();
                     })
@@ -8166,9 +8190,12 @@ pub fn reload(cx: &mut App) {
             .update(cx, |_, window, cx| {
                 window.prompt(
                     PromptLevel::Info,
-                    "Are you sure you want to restart?",
+                    localization::t(cx, "Are you sure you want to restart?").as_ref(),
                     None,
-                    &["Restart", "Cancel"],
+                    &[
+                        localization::prompt_button(cx, "Restart"),
+                        localization::prompt_button(cx, "Cancel"),
+                    ],
                     cx,
                 )
             })

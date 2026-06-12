@@ -141,8 +141,14 @@ pub trait PickerDelegate: Sized + 'static {
         None
     }
     fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str>;
-    fn no_matches_text(&self, _window: &mut Window, _cx: &mut App) -> Option<SharedString> {
-        Some("No matches".into())
+    fn localized_placeholder_text(&self) -> Option<&'static str> {
+        None
+    }
+    fn no_matches_text(&self, _window: &mut Window, cx: &mut App) -> Option<SharedString> {
+        Some(localization::t(cx, "No matches"))
+    }
+    fn localized_no_matches_text(&self) -> Option<&'static str> {
+        None
     }
     fn update_matches(
         &mut self,
@@ -286,7 +292,12 @@ impl<D: PickerDelegate> Picker<D> {
     /// If `PickerDelegate::render_match` can return items with different heights, use `Picker::list`.
     pub fn uniform_list(delegate: D, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let head = Head::editor(
-            delegate.placeholder_text(window, cx),
+            delegate
+                .localized_placeholder_text()
+                .map(localization::ui)
+                .unwrap_or_else(|| {
+                    SharedString::from(delegate.placeholder_text(window, cx).as_ref()).into()
+                }),
             Self::on_input_editor_event,
             window,
             cx,
@@ -321,7 +332,12 @@ impl<D: PickerDelegate> Picker<D> {
     /// If `PickerDelegate::render_match` only returns items with the same height, use `Picker::uniform_list` as its implementation is optimized for that.
     pub fn list(delegate: D, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let head = Head::editor(
-            delegate.placeholder_text(window, cx),
+            delegate
+                .localized_placeholder_text()
+                .map(localization::ui)
+                .unwrap_or_else(|| {
+                    SharedString::from(delegate.placeholder_text(window, cx).as_ref()).into()
+                }),
             Self::on_input_editor_event,
             window,
             cx,
@@ -678,9 +694,12 @@ impl<D: PickerDelegate> Picker<D> {
     pub fn refresh_placeholder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         match &self.head {
             Head::Editor(editor) => {
-                let placeholder = self.delegate.placeholder_text(window, cx);
-
-                editor.set_placeholder_text(placeholder.as_ref(), window, cx);
+                if let Some(placeholder) = self.delegate.localized_placeholder_text() {
+                    editor.set_localized_placeholder_text(placeholder, window, cx);
+                } else {
+                    let placeholder = self.delegate.placeholder_text(window, cx);
+                    editor.set_placeholder_text(placeholder.as_ref(), window, cx);
+                }
                 cx.notify();
             }
             Head::Empty(_) => {}
@@ -1165,7 +1184,12 @@ impl<D: PickerDelegate> Render for Picker<D> {
                 )
             })
             .when(self.delegate.match_count() == 0, |el| {
-                el.when_some(self.delegate.no_matches_text(window, cx), |el, text| {
+                let text = self
+                    .delegate
+                    .localized_no_matches_text()
+                    .map(|text| localization::t(cx, text))
+                    .or_else(|| self.delegate.no_matches_text(window, cx));
+                el.when_some(text, |el, text| {
                     el.child(
                         v_flex()
                             .flex_grow_1()

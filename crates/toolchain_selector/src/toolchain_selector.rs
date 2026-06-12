@@ -175,22 +175,24 @@ impl AddToolchainState {
                                 .p_1()
                                 .justify_between()
                                 .gap_2()
-                                .child(Label::new("Select Toolchain Path").color(Color::Muted).map(
-                                    |this| {
-                                        if is_loading {
-                                            this.with_animation(
-                                                "select-toolchain-label",
-                                                Animation::new(Duration::from_secs(2))
-                                                    .repeat()
-                                                    .with_easing(pulsating_between(0.4, 0.8)),
-                                                |label, delta| label.alpha(delta),
-                                            )
-                                            .into_any()
-                                        } else {
-                                            this.into_any_element()
-                                        }
-                                    },
-                                ))
+                                .child(
+                                    Label::localized("Select Toolchain Path")
+                                        .color(Color::Muted)
+                                        .map(|this| {
+                                            if is_loading {
+                                                this.with_animation(
+                                                    "select-toolchain-label",
+                                                    Animation::new(Duration::from_secs(2))
+                                                        .repeat()
+                                                        .with_easing(pulsating_between(0.4, 0.8)),
+                                                    |label, delta| label.alpha(delta),
+                                                )
+                                                .into_any()
+                                            } else {
+                                                this.into_any_element()
+                                            }
+                                        }),
+                                )
                                 .when_some(error, |this, error| {
                                     this.child(Label::new(error).color(Color::Error))
                                 }),
@@ -385,7 +387,7 @@ impl Render for AddToolchainState {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme().clone();
         let weak = self.weak.upgrade();
-        let label = SharedString::new_static("Add");
+        let label = localization::t(cx, "Add");
 
         v_flex()
             .size_full()
@@ -435,7 +437,7 @@ impl Render for AddToolchainState {
                             .child(
                                 v_flex()
                                     .child(
-                                        Label::new("Scope")
+                                        Label::localized("Scope")
                                             .size(LabelSize::Small)
                                             .color(Color::Muted)
                                             .mt_1()
@@ -782,6 +784,7 @@ impl ToolchainSelectorDelegate {
     ) -> Self {
         let _project = project.clone();
         let path_style = project.read(cx).path_style(cx);
+        let ui_language = localization::current_language(cx);
 
         let _fetch_candidates_task = cx.spawn_in(window, {
             async move |this, cx| {
@@ -820,13 +823,19 @@ impl ToolchainSelectorDelegate {
                     .await?;
                 let pretty_path = {
                     if relative_path.is_empty() {
-                        Cow::Borrowed("worktree root")
+                        Cow::Borrowed(localization::translate(ui_language, "worktree root"))
                     } else {
                         Cow::Owned(format!("`{}`", relative_path.display(path_style)))
                     }
                 };
-                let placeholder_text =
-                    format!("Select a {} for {pretty_path}…", meta.term.to_lowercase(),).into();
+                let placeholder_text = match ui_language {
+                    localization::UiLanguage::ChineseSimplified => {
+                        format!("为 {pretty_path} 选择{}…", meta.term).into()
+                    }
+                    localization::UiLanguage::English => {
+                        format!("Select a {} for {pretty_path}…", meta.term.to_lowercase()).into()
+                    }
+                };
                 let _ = this.update_in(cx, move |this, window, cx| {
                     this.delegate.relative_path = relative_path;
                     this.delegate.placeholder_text = placeholder_text;
@@ -1143,7 +1152,7 @@ impl PickerDelegate for ToolchainSelectorDelegate {
                                 }),
                         )
                         .child(
-                            Button::new("select", "Select")
+                            Button::localized("select", "Select")
                                 .key_binding(KeyBinding::for_action_in(
                                     &menu::Confirm,
                                     &self.focus_handle,

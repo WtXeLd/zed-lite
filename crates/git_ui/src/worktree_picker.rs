@@ -9,6 +9,7 @@ use gpui::{
     InteractiveElement, IntoElement, Modifiers, ModifiersChangedEvent, ParentElement, PromptLevel,
     Render, SharedString, Styled, Subscription, Task, TaskExt, WeakEntity, Window, actions, rems,
 };
+use localization::UiLanguage;
 use picker::{Picker, PickerDelegate, PickerEditorPosition};
 use project::Project;
 use project::git_store::RepositoryEvent;
@@ -324,7 +325,7 @@ fn remove_worktree_command(path: &Path, force: bool) -> String {
 
 struct WorktreeRemoveForceDeletePrompt {
     required_error_substrings: &'static [&'static str],
-    message: fn(&str) -> String,
+    message: fn(&str, UiLanguage) -> String,
 }
 
 impl WorktreeRemoveForceDeletePrompt {
@@ -344,19 +345,29 @@ const WORKTREE_REMOVE_FORCE_DELETE_PROMPTS: &[WorktreeRemoveForceDeletePrompt] =
         message: dirty_worktree_force_delete_prompt,
     }];
 
-fn dirty_worktree_force_delete_prompt(display_name: &str) -> String {
-    format!("Worktree \"{display_name}\" contains modified or untracked files. Force delete it?")
+fn dirty_worktree_force_delete_prompt(display_name: &str, language: UiLanguage) -> String {
+    match language {
+        UiLanguage::ChineseSimplified => {
+            format!("工作树 \"{display_name}\" 包含已修改或未跟踪的文件。要强制删除吗？")
+        }
+        UiLanguage::English => {
+            format!(
+                "Worktree \"{display_name}\" contains modified or untracked files. Force delete it?"
+            )
+        }
+    }
 }
 
 fn force_delete_prompt_for_worktree_remove_error(
     error: &anyhow::Error,
     display_name: &str,
+    language: UiLanguage,
 ) -> Option<String> {
     let normalized_error_message = error.to_string().to_lowercase();
     WORKTREE_REMOVE_FORCE_DELETE_PROMPTS
         .iter()
         .find(|prompt| prompt.matches(&normalized_error_message))
-        .map(|prompt| (prompt.message)(display_name))
+        .map(|prompt| (prompt.message)(display_name, language))
 }
 
 struct DeleteWorktreeTooltip {
@@ -519,13 +530,7 @@ impl WorktreePickerDelegate {
                 Err(error) => {
                     log::error!("Failed to remove worktree: {}", error);
 
-                    let force_delete_prompt = (!force)
-                        .then(|| {
-                            force_delete_prompt_for_worktree_remove_error(&error, &display_name)
-                        })
-                        .flatten();
-
-                    if let Some(prompt_message) = force_delete_prompt {
+                    if !force {
                         picker.update_in(cx, |picker, _window, cx| {
                             if picker.delegate.deleting_worktree_paths.remove(&path) {
                                 cx.notify();
@@ -533,14 +538,32 @@ impl WorktreePickerDelegate {
                         })?;
 
                         let answer = cx.update(|window, cx| {
-                            window.prompt(
-                                PromptLevel::Warning,
-                                &prompt_message,
-                                None,
-                                &["Force Delete", "Cancel"],
-                                cx,
-                            )
+                            let Some(prompt_message) =
+                                force_delete_prompt_for_worktree_remove_error(
+                                    &error,
+                                    &display_name,
+                                    localization::current_language(cx),
+                                )
+                            else {
+                                return None;
+                            };
+                            window
+                                .prompt(
+                                    PromptLevel::Warning,
+                                    &prompt_message,
+                                    None,
+                                    &[
+                                        localization::prompt_button(cx, "Force Delete"),
+                                        localization::prompt_button(cx, "Cancel"),
+                                    ],
+                                    cx,
+                                )
+                                .into()
                         })?;
+
+                        let Some(answer) = answer else {
+                            return Ok(());
+                        };
 
                         if answer.await != Ok(0) {
                             return Ok(());
@@ -660,6 +683,10 @@ impl PickerDelegate for WorktreePickerDelegate {
 
     fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
         "Select a worktree…".into()
+    }
+
+    fn localized_placeholder_text(&self) -> Option<&'static str> {
+        Some("Select a worktree…")
     }
 
     fn editor_position(&self) -> PickerEditorPosition {
@@ -968,14 +995,21 @@ impl PickerDelegate for WorktreePickerDelegate {
             ),
             WorktreeEntry::CreateFromCurrentBranch => {
                 let branch_label = if self.has_multiple_repositories {
-                    "current branches".to_string()
+                    localization::t(cx, "current branches").to_string()
                 } else {
                     self.current_branch_name
                         .clone()
                         .unwrap_or_else(|| "HEAD".to_string())
                 };
 
-                let label = format!("Create new worktree based on {branch_label}");
+                let label = match localization::current_language(cx) {
+                    localization::UiLanguage::ChineseSimplified => {
+                        format!("基于 {branch_label} 创建新工作树")
+                    }
+                    localization::UiLanguage::English => {
+                        format!("Create new worktree based on {branch_label}")
+                    }
+                };
 
                 let item = create_new_list_item(
                     "create-from-current".to_string().into(),
@@ -988,7 +1022,14 @@ impl PickerDelegate for WorktreePickerDelegate {
             }
             WorktreeEntry::CreateFromDefaultBranch { default_branch } => {
                 let default_branch_name = default_branch.display_name();
-                let label = format!("Create new worktree based on {default_branch_name}");
+                let label = match localization::current_language(cx) {
+                    localization::UiLanguage::ChineseSimplified => {
+                        format!("基于 {default_branch_name} 创建新工作树")
+                    }
+                    localization::UiLanguage::English => {
+                        format!("Create new worktree based on {default_branch_name}")
+                    }
+                };
 
                 let item = create_new_list_item(
                     "create-from-main".to_string().into(),
@@ -1110,7 +1151,7 @@ impl PickerDelegate for WorktreePickerDelegate {
                                             .with_rotate_animation(2),
                                     )
                                     .child(
-                                        Label::new("Deleting…")
+                                        Label::localized("Deleting…")
                                             .size(LabelSize::Small)
                                             .color(Color::Muted),
                                     ),
@@ -1120,7 +1161,7 @@ impl PickerDelegate for WorktreePickerDelegate {
                             let open_in_new_window_button =
                                 IconButton::new(("open-new-window", ix), IconName::ArrowUpRight)
                                     .icon_size(IconSize::Small)
-                                    .tooltip(Tooltip::text("Open in New Window"))
+                                    .tooltip(Tooltip::localized_text("Open in New Window"))
                                     .on_click(cx.listener(move |picker, _, window, cx| {
                                         let Some(entry) = picker.delegate.matches.get(ix) else {
                                             return;
@@ -1262,7 +1303,7 @@ impl PickerDelegate for WorktreePickerDelegate {
             Some(
                 footer
                     .child(
-                        Button::new("create-worktree", "Create")
+                        Button::localized("create-worktree", "Create")
                             .key_binding(
                                 KeyBinding::for_action_in(&menu::Confirm, &focus_handle, cx)
                                     .map(|kb| kb.size(rems_from_px(12.))),
@@ -1278,7 +1319,7 @@ impl PickerDelegate for WorktreePickerDelegate {
                 footer
                     .when(is_deleting, |this| {
                         this.child(
-                            Button::new("delete-worktree", "Deleting…")
+                            Button::localized("delete-worktree", "Deleting…")
                                 .loading(true)
                                 .disabled(true),
                         )
@@ -1286,7 +1327,7 @@ impl PickerDelegate for WorktreePickerDelegate {
                     .when(!is_deleting && can_delete, |this| {
                         let focus_handle = focus_handle.clone();
                         this.child(
-                            Button::new("delete-worktree", "Delete")
+                            Button::localized("delete-worktree", "Delete")
                                 .key_binding(
                                     KeyBinding::for_action_in(&DeleteWorktree, &focus_handle, cx)
                                         .map(|kb| kb.size(rems_from_px(12.))),
@@ -1299,7 +1340,7 @@ impl PickerDelegate for WorktreePickerDelegate {
                     .when(!is_deleting && !is_current, |this| {
                         let focus_handle = focus_handle.clone();
                         this.child(
-                            Button::new("open-in-new-window", "Open in New Window")
+                            Button::localized("open-in-new-window", "Open in New Window")
                                 .key_binding(
                                     KeyBinding::for_action_in(
                                         &menu::SecondaryConfirm,
@@ -1315,7 +1356,7 @@ impl PickerDelegate for WorktreePickerDelegate {
                     })
                     .when(!is_deleting, |this| {
                         this.child(
-                            Button::new("open-worktree", "Open")
+                            Button::localized("open-worktree", "Open")
                                 .key_binding(
                                     KeyBinding::for_action_in(&menu::Confirm, &focus_handle, cx)
                                         .map(|kb| kb.size(rems_from_px(12.))),

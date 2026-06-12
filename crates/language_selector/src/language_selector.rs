@@ -202,6 +202,10 @@ impl PickerDelegate for LanguageSelectorDelegate {
         "Select a language…".into()
     }
 
+    fn localized_placeholder_text(&self) -> Option<&'static str> {
+        Some("Select a language…")
+    }
+
     fn match_count(&self) -> usize {
         self.matches.len()
     }

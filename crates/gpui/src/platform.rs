@@ -1758,13 +1758,33 @@ pub enum PromptButton {
     /// Cancel button
     Cancel(SharedString),
     /// Other button
-    Other(SharedString),
+    Other {
+        /// User-visible button label.
+        label: SharedString,
+        /// Stable untranslated identifier used for tests and logic that should not depend on UI language.
+        stable_id: Option<&'static str>,
+    },
 }
 
 impl PromptButton {
+    /// Create a prompt button with a translated label and a stable untranslated identifier.
+    pub fn localized(id: &'static str, label: impl Into<SharedString>) -> Self {
+        match id.to_lowercase().as_str() {
+            "ok" => PromptButton::Ok(label.into()),
+            "cancel" => PromptButton::Cancel(label.into()),
+            _ => PromptButton::Other {
+                label: label.into(),
+                stable_id: Some(id),
+            },
+        }
+    }
+
     /// Create a button with label
     pub fn new(label: impl Into<SharedString>) -> Self {
-        PromptButton::Other(label.into())
+        PromptButton::Other {
+            label: label.into(),
+            stable_id: None,
+        }
     }
 
     /// Create an Ok button
@@ -1788,7 +1808,16 @@ impl PromptButton {
         match self {
             PromptButton::Ok(label) => label,
             PromptButton::Cancel(label) => label,
-            PromptButton::Other(label) => label,
+            PromptButton::Other { label, .. } => label,
+        }
+    }
+
+    /// Returns the stable untranslated identifier for this button, if available.
+    pub fn stable_id(&self) -> Option<&'static str> {
+        match self {
+            PromptButton::Ok(_) => Some("Ok"),
+            PromptButton::Cancel(_) => Some("Cancel"),
+            PromptButton::Other { stable_id, .. } => *stable_id,
         }
     }
 }
@@ -1798,7 +1827,10 @@ impl From<&str> for PromptButton {
         match value.to_lowercase().as_str() {
             "ok" => PromptButton::Ok("Ok".into()),
             "cancel" => PromptButton::Cancel("Cancel".into()),
-            _ => PromptButton::Other(SharedString::from(value.to_owned())),
+            _ => PromptButton::Other {
+                label: SharedString::from(value.to_owned()),
+                stable_id: None,
+            },
         }
     }
 }
@@ -2288,6 +2320,25 @@ impl From<String> for ClipboardString {
             text: value,
             metadata: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod prompt_button_tests {
+    use super::*;
+
+    #[test]
+    fn localized_prompt_button_keeps_stable_id_separate_from_label() {
+        let button = PromptButton::localized("Save all", "全部保存");
+        assert_eq!(button.stable_id(), Some("Save all"));
+        assert_eq!(button.label().as_ref(), "全部保存");
+    }
+
+    #[test]
+    fn standard_prompt_buttons_have_stable_ids() {
+        assert_eq!(PromptButton::ok("确定").stable_id(), Some("Ok"));
+        assert_eq!(PromptButton::cancel("取消").stable_id(), Some("Cancel"));
+        assert_eq!(PromptButton::new("自定义").stable_id(), None);
     }
 }
 

@@ -6,8 +6,7 @@ use strum::IntoEnumIterator;
 use theme::all_theme_colors;
 use ui::{
     Avatar, ButtonLike, Checkbox, DecoratedIcon, ElevationIndex, IconDecoration, Indicator,
-    KeybindingHint, Switch, TintColor, Tooltip, prelude::*,
-    utils::calculate_contrast_ratio,
+    KeybindingHint, Switch, TintColor, Tooltip, prelude::*, utils::calculate_contrast_ratio,
 };
 
 use crate::{Item, Workspace};
@@ -126,14 +125,18 @@ impl ThemePreview {
     ) -> impl IntoElement {
         let bg = layer.bg(cx);
 
-        let label_with_contrast = |label: &str, fg: Hsla| {
+        let label_with_contrast = |label: &'static str, fg: Hsla| {
             let contrast = calculate_contrast_ratio(fg, bg);
-            format!("{} ({:.2})", label, contrast)
+            format!("{} ({:.2})", localization::t(cx, label), contrast)
         };
 
         v_flex()
             .gap_1()
-            .child(Headline::new("Text").size(HeadlineSize::Small).color(Color::Muted))
+            .child(
+                Headline::localized("Text")
+                    .size(HeadlineSize::Small)
+                    .color(Color::Muted),
+            )
             .child(
                 h_flex()
                     .items_start()
@@ -141,17 +144,25 @@ impl ThemePreview {
                     .child(
                         v_flex()
                             .gap_1()
-                            .child(Headline::new("Headline Sizes").size(HeadlineSize::Small).color(Color::Muted))
-                            .child(Headline::new("XLarge Headline").size(HeadlineSize::XLarge))
-                            .child(Headline::new("Large Headline").size(HeadlineSize::Large))
-                            .child(Headline::new("Medium Headline").size(HeadlineSize::Medium))
-                            .child(Headline::new("Small Headline").size(HeadlineSize::Small))
-                            .child(Headline::new("XSmall Headline").size(HeadlineSize::XSmall)),
+                            .child(
+                                Headline::localized("Headline Sizes")
+                                    .size(HeadlineSize::Small)
+                                    .color(Color::Muted),
+                            )
+                            .child(Headline::localized("XLarge Headline").size(HeadlineSize::XLarge))
+                            .child(Headline::localized("Large Headline").size(HeadlineSize::Large))
+                            .child(Headline::localized("Medium Headline").size(HeadlineSize::Medium))
+                            .child(Headline::localized("Small Headline").size(HeadlineSize::Small))
+                            .child(Headline::localized("XSmall Headline").size(HeadlineSize::XSmall)),
                     )
                     .child(
                         v_flex()
                             .gap_1()
-                            .child(Headline::new("Text Colors").size(HeadlineSize::Small).color(Color::Muted))
+                            .child(
+                                Headline::localized("Text Colors")
+                                    .size(HeadlineSize::Small)
+                                    .color(Color::Muted),
+                            )
                             .child(
                                 Label::new(label_with_contrast(
                                     "Default Text",
@@ -275,11 +286,12 @@ impl ThemePreview {
                     .child(
                         v_flex()
                             .gap_1()
-                            .child(Headline::new("Wrapping Text").size(HeadlineSize::Small).color(Color::Muted))
                             .child(
-                                div().max_w(px(200.)).child(
-                                "This is a longer piece of text that should wrap to multiple lines. It demonstrates how text behaves when it exceeds the width of its container."
-                            ))
+                                Headline::localized("Wrapping Text")
+                                    .size(HeadlineSize::Small)
+                                    .color(Color::Muted),
+                            )
+                            .child(div().max_w(px(200.)).child(localization::t(cx, "This is a longer piece of text that should wrap to multiple lines. It demonstrates how text behaves when it exceeds the width of its container.")))
                     )
             )
     }
@@ -296,7 +308,7 @@ impl ThemePreview {
         v_flex()
             .gap_1()
             .child(
-                Headline::new("Colors")
+                Headline::localized("Colors")
                     .size(HeadlineSize::Small)
                     .color(Color::Muted),
             )
@@ -338,7 +350,13 @@ impl ThemePreview {
             .bg(layer.bg(cx))
             .text_color(cx.theme().colors().text)
             .gap_2()
-            .child(Headline::new(layer.clone().to_string()).size(HeadlineSize::Medium))
+            .child(
+                Headline::new(localization::t_shared_if_known(
+                    cx,
+                    &layer.clone().to_string().into(),
+                ))
+                .size(HeadlineSize::Medium),
+            )
             .child(self.render_text(layer, window, cx))
             .child(self.render_colors(layer, window, cx))
     }
@@ -354,8 +372,8 @@ impl ThemePreview {
             .size_full()
             .child(
                 v_flex()
-                    .child(Headline::new("Theme Preview").size(HeadlineSize::Large))
-                    .child(div().w_full().text_color(cx.theme().colors().text_muted).child("This view lets you preview a range of UI elements across a theme. Use it for testing out changes to the theme."))
+                    .child(Headline::localized("Theme Preview").size(HeadlineSize::Large))
+                    .child(div().w_full().text_color(cx.theme().colors().text_muted).child(localization::t(cx, "This view lets you preview a range of UI elements across a theme. Use it for testing out changes to the theme.")))
                     )
             .child(self.render_theme_layer(ElevationIndex::Background, window, cx))
             .child(self.render_theme_layer(ElevationIndex::Surface, window, cx))
@@ -374,17 +392,17 @@ impl ThemePreview {
             .size_full()
             .child(v_flex()
                 .gap_4()
-                .child(Headline::new("Headline 1").size(HeadlineSize::XLarge))
+                .child(Headline::localized("Headline 1").size(HeadlineSize::XLarge))
                 .child(Label::new("Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."))
-                .child(Headline::new("Headline 2").size(HeadlineSize::Large))
+                .child(Headline::localized("Headline 2").size(HeadlineSize::Large))
                 .child(Label::new("Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."))
-                .child(Headline::new("Headline 3").size(HeadlineSize::Medium))
+                .child(Headline::localized("Headline 3").size(HeadlineSize::Medium))
                 .child(Label::new("Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur."))
-                .child(Headline::new("Headline 4").size(HeadlineSize::Small))
+                .child(Headline::localized("Headline 4").size(HeadlineSize::Small))
                 .child(Label::new("Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."))
-                .child(Headline::new("Headline 5").size(HeadlineSize::XSmall))
+                .child(Headline::localized("Headline 5").size(HeadlineSize::XSmall))
                 .child(Label::new("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."))
-                .child(Headline::new("Body Text").size(HeadlineSize::Small))
+                .child(Headline::localized("Body Text").size(HeadlineSize::Small))
                 .child(Label::new("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."))
             )
     }

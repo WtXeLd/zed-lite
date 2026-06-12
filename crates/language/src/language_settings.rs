@@ -471,7 +471,6 @@ impl AllLanguageSettings {
             Cow::Borrowed(settings)
         }
     }
-
 }
 
 fn merge_with_modeline(settings: &mut LanguageSettings, modeline: &ModelineSettings) {

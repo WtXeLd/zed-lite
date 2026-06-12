@@ -37,6 +37,7 @@ gpui.workspace = true
 itertools.workspace = true
 language.workspace = true
 linkify.workspace = true
+localization.workspace = true
 log.workspace = true
 markdown.workspace = true
 menu.workspace = true

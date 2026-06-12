@@ -13,10 +13,10 @@ use std::{
     sync::Arc,
 };
 use task::{Shell, ShellBuilder, ShellKind, SpawnInTerminal};
-use terminal::{TaskState, TaskStatus, Terminal, TerminalBuilder, terminal_settings::TerminalSettings};
-use util::{
-    command::new_std_command, get_system_shell, maybe, rel_path::RelPath,
+use terminal::{
+    TaskState, TaskStatus, Terminal, TerminalBuilder, terminal_settings::TerminalSettings,
 };
+use util::{command::new_std_command, get_system_shell, maybe, rel_path::RelPath};
 
 use crate::{Project, ProjectPath};
 

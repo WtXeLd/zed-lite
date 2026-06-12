@@ -4943,7 +4943,7 @@ async fn test_start_of_word_preferred_over_scattered_match(cx: &mut TestAppConte
         assert!(!matches.is_empty(),);
         assert_eq!(
             matches[0].path.as_unix_str(),
-                "crates/playback/src/media/playback.rs",
+            "crates/playback/src/media/playback.rs",
         );
     });
 }

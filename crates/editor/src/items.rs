@@ -17,7 +17,9 @@ use gpui::{
     AnyElement, App, Context, Entity, EntityId, EventEmitter, Font, IntoElement, ParentElement,
     Pixels, SharedString, Styled, Task, WeakEntity, Window,
 };
-use language::{Bias, Buffer, BufferRow, CharKind, CharScopeContext, HighlightedText, LocalFile, Point};
+use language::{
+    Bias, Buffer, BufferRow, CharKind, CharScopeContext, HighlightedText, LocalFile, Point,
+};
 use lsp::DiagnosticSeverity;
 use multi_buffer::{BufferOffset, MultiBufferOffset};
 use project::{
@@ -48,11 +50,7 @@ use workspace::{
         SearchableItemHandle,
     },
 };
-use workspace::{
-    Pane, WorkspaceSettings,
-    item::ProjectItemKind,
-    searchable::SearchOptions,
-};
+use workspace::{Pane, WorkspaceSettings, item::ProjectItemKind, searchable::SearchOptions};
 use zed_actions::preview::{
     markdown::OpenPreview as OpenMarkdownPreview, svg::OpenPreview as OpenSvgPreview,
 };

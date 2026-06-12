@@ -44,7 +44,6 @@ impl SettingsInputField {
         self.tab_index = Some(arg);
         self
     }
-
 }
 
 impl RenderOnce for SettingsInputField {
@@ -71,10 +70,14 @@ impl RenderOnce for SettingsInputField {
                 }
 
                 if let Some(confirm) = confirm.take() {
-                    cx.on_focus_out(&editor_focus_handle, window, move |editor, _, window, cx| {
-                        let text = Some(editor.text(cx));
-                        confirm(text, window, cx);
-                    })
+                    cx.on_focus_out(
+                        &editor_focus_handle,
+                        window,
+                        move |editor, _, window, cx| {
+                            let text = Some(editor.text(cx));
+                            confirm(text, window, cx);
+                        },
+                    )
                     .detach();
                 }
 
@@ -138,7 +141,7 @@ impl RenderOnce for SettingsInputField {
                     .right_1()
                     .invisible()
                     .when(is_editor_focused, |this| this.visible())
-                    .group_hover("settings-input-field-editor", |this| this.visible())
+                    .group_hover("settings-input-field-editor", |this| this.visible()),
             )
             .when_some(self.confirm, |this, confirm| {
                 this.on_action::<menu::Confirm>({

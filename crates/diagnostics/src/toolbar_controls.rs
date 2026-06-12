@@ -56,7 +56,7 @@ impl Render for ToolbarControls {
             .child({
                 IconButton::new("toggle_search", IconName::MagnifyingGlass)
                     .icon_size(IconSize::Small)
-                    .tooltip(Tooltip::for_action_title(
+                    .tooltip(Tooltip::for_localized_action_title(
                         "Buffer Search",
                         &buffer_search::Deploy::find(),
                     ))
@@ -70,7 +70,7 @@ impl Render for ToolbarControls {
                         IconButton::new("stop-updating", IconName::Stop)
                             .icon_color(Color::Error)
                             .icon_size(IconSize::Small)
-                            .tooltip(Tooltip::for_action_title(
+                            .tooltip(Tooltip::for_localized_action_title(
                                 "Stop Diagnostics Update",
                                 &ToggleDiagnosticsRefresh,
                             ))
@@ -85,7 +85,7 @@ impl Render for ToolbarControls {
                     div.child(
                         IconButton::new("refresh-diagnostics", IconName::ArrowCircle)
                             .icon_size(IconSize::Small)
-                            .tooltip(Tooltip::for_action_title(
+                            .tooltip(Tooltip::for_localized_action_title(
                                 "Refresh Diagnostics",
                                 &ToggleDiagnosticsRefresh,
                             ))
@@ -103,7 +103,7 @@ impl Render for ToolbarControls {
                 IconButton::new("toggle-warnings", IconName::Warning)
                     .icon_color(warning_color)
                     .icon_size(IconSize::Small)
-                    .tooltip(Tooltip::text(warning_tooltip))
+                    .tooltip(Tooltip::localized_text(warning_tooltip))
                     .on_click(cx.listener(|this, _, window, cx| {
                         if let Some(editor) = &this.editor {
                             editor.toggle_warnings(window, cx)

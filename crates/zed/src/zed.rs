@@ -26,11 +26,11 @@ use git_ui::git_panel::GitPanel;
 use git_ui::project_diff::{BranchDiffToolbar, ProjectDiffToolbar};
 use git_ui::solo_diff_view::{SoloDiffGitToolbar, SoloDiffStyleToolbar};
 use gpui::{
-    Action, App, AppContext as _, ClipboardItem, Context, DismissEvent,
-    Element, Entity, FocusHandle, Focusable, Image, ImageFormat, KeyBinding, ParentElement,
-    PathPromptOptions, PromptLevel, ReadGlobal, SharedString, Size, Task, TaskExt, TitlebarOptions,
-    UpdateGlobal, WeakEntity, Window, WindowBounds, WindowHandle, WindowKind, WindowOptions,
-    actions, image_cache, img, point, px, retain_all,
+    Action, App, AppContext as _, ClipboardItem, Context, DismissEvent, Element, Entity,
+    FocusHandle, Focusable, Image, ImageFormat, KeyBinding, ParentElement, PathPromptOptions,
+    PromptLevel, ReadGlobal, SharedString, Size, Task, TaskExt, TitlebarOptions, UpdateGlobal,
+    WeakEntity, Window, WindowBounds, WindowHandle, WindowKind, WindowOptions, actions,
+    image_cache, img, point, px, retain_all,
 };
 use image_viewer::ImageInfo;
 use language::Capability;
@@ -71,8 +71,8 @@ use workspace::notifications::{NotificationId, dismiss_app_notification, show_ap
 
 use workspace::{
     AppState, MultiWorkspace, NewFile, NewWindow, OpenLog, Toast, Workspace, WorkspaceSettings,
-    create_and_open_local_file,
-    notifications::simple_message_notification::MessageNotification, open_new,
+    create_and_open_local_file, notifications::simple_message_notification::MessageNotification,
+    open_new,
 };
 use workspace::{CloseIntent, CloseProject, CloseWindow, with_active_or_new_workspace};
 use workspace::{Pane, notifications::DetachAndPromptErr};
@@ -398,7 +398,6 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
                 })
                 .unwrap_or(true)
         });
-
     })
     .detach();
 
@@ -509,9 +508,9 @@ fn initialize_file_watcher(window: &mut Window, cx: &mut Context<Workspace>) {
         );
         let prompt = window.prompt(
             PromptLevel::Critical,
-            "Could not start inotify",
+            localization::t(cx, "Could not start inotify").as_ref(),
             Some(&message),
-            &["Troubleshoot and Quit"],
+            &[localization::prompt_button(cx, "Troubleshoot and Quit")],
             cx,
         );
         cx.spawn(async move |_, cx| {
@@ -540,9 +539,9 @@ fn initialize_file_watcher(window: &mut Window, cx: &mut Context<Workspace>) {
         );
         let prompt = window.prompt(
             PromptLevel::Critical,
-            "Could not start ReadDirectoryChangesW",
+            localization::t(cx, "Could not start ReadDirectoryChangesW").as_ref(),
             Some(&message),
-            &["Troubleshoot and Quit"],
+            &[localization::prompt_button(cx, "Troubleshoot and Quit")],
             cx,
         );
         cx.spawn(async move |_, cx| {
@@ -590,9 +589,12 @@ fn show_software_emulation_warning_if_needed(
         );
         let prompt = window.prompt(
             PromptLevel::Critical,
-            "Unsupported GPU",
+            localization::t(cx, "Unsupported GPU").as_ref(),
             Some(&message),
-            &["Skip", "Troubleshoot and Quit"],
+            &[
+                localization::prompt_button(cx, "Skip"),
+                localization::prompt_button(cx, "Troubleshoot and Quit"),
+            ],
             cx,
         );
         cx.spawn(async move |_, cx| {
@@ -975,7 +977,6 @@ fn register_actions(
 
     #[cfg(not(target_os = "windows"))]
     workspace.register_action(install_cli);
-
 }
 
 fn initialize_pane(
@@ -1120,14 +1121,14 @@ fn open_about_window(cx: &mut App) {
                             .child(Headline::new(self.message.clone()))
                             .when_some(self.commit.clone(), |this, commit| {
                                 this.child(
-                                    Label::new("Commit")
+                                    Label::localized("Commit")
                                         .color(Color::Muted)
                                         .size(LabelSize::XSmall),
                                 )
                                 .child(Label::new(commit).size(LabelSize::Small))
                             })
                             .child(
-                                Label::new("Version")
+                                Label::localized("Version")
                                     .color(Color::Muted)
                                     .size(LabelSize::XSmall),
                             )
@@ -1145,7 +1146,7 @@ fn open_about_window(cx: &mut App) {
                                         window.remove_window();
                                     }))
                                     .child(
-                                        Button::new("ok", "Ok")
+                                        Button::localized("ok", "Ok")
                                             .full_width()
                                             .style(ButtonStyle::OutlinedGhost)
                                             .toggle_state(ok_is_focused)
@@ -1165,7 +1166,7 @@ fn open_about_window(cx: &mut App) {
                                         },
                                     ))
                                     .child(
-                                        Button::new("copy", "Copy")
+                                        Button::localized("copy", "Copy")
                                             .full_width()
                                             .style(ButtonStyle::Tinted(TintColor::Accent))
                                             .toggle_state(copy_is_focused)
@@ -1270,9 +1271,12 @@ fn quit(_: &Quit, cx: &mut App) {
                 .update(cx, |_, window, cx| {
                     window.prompt(
                         PromptLevel::Info,
-                        "Are you sure you want to quit?",
+                        localization::t(cx, "Are you sure you want to quit?").as_ref(),
                         None,
-                        &["Quit", "Cancel"],
+                        &[
+                            localization::prompt_button(cx, "Quit"),
+                            localization::prompt_button(cx, "Cancel"),
+                        ],
                         cx,
                     )
                 })
@@ -1763,7 +1767,7 @@ fn reload_keymaps(cx: &mut App, mut user_key_bindings: Vec<KeyBinding>) {
     // On Windows, this is set in the `update_jump_list` method of the `HistoryManager`.
     #[cfg(not(target_os = "windows"))]
     cx.set_dock_menu(vec![gpui::MenuItem::action(
-        "New Window",
+        localization::t(cx, "New Window"),
         workspace::NewWindow,
     )]);
     // todo: nicer api here?

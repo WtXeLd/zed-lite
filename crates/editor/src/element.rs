@@ -11,9 +11,8 @@ use crate::{
     ContextMenuPlacement, CursorShape, CustomBlockId, DisplayDiffHunk, DisplayPoint, DisplayRow,
     Editor, EditorMode, EditorSettings, EditorSnapshot, EditorStyle, FILE_HEADER_HEIGHT,
     FocusedBlock, GutterDimensions, HalfPageDown, HalfPageUp, HandleInput, InlayHintRefreshReason,
-    LineDown, LineHighlight, LineUp,
-    MAX_LINE_LEN, MINIMAP_FONT_SIZE, PageDown, PageUp, Point, RowExt, RowRangeExt, Selection,
-    SelectionDragState, SizingBehavior, SoftWrap, ToPoint,
+    LineDown, LineHighlight, LineUp, MAX_LINE_LEN, MINIMAP_FONT_SIZE, PageDown, PageUp, Point,
+    RowExt, RowRangeExt, Selection, SelectionDragState, SizingBehavior, SoftWrap, ToPoint,
     code_context_menus::{CodeActionsMenu, MENU_ASIDE_MAX_WIDTH, MENU_ASIDE_MIN_WIDTH, MENU_GAP},
     column_pixels,
     display_map::{
@@ -2489,7 +2488,7 @@ impl EditorElement {
                             editor.expand_excerpt(start_anchor, direction, window, cx);
                         });
                     })
-                    .tooltip(Tooltip::for_action_title(
+                    .tooltip(Tooltip::for_localized_action_title(
                         "Expand Excerpt",
                         &crate::actions::ExpandExcerpts::default(),
                     ))
@@ -3656,10 +3655,7 @@ impl EditorElement {
                 } else {
                     None
                 };
-                vec![context_menu]
-                    .into_iter()
-                    .flatten()
-                    .collect::<Vec<_>>()
+                vec![context_menu].into_iter().flatten().collect::<Vec<_>>()
             },
         )?;
 
@@ -6541,7 +6537,7 @@ pub fn render_breadcrumb_text(
                                     h_flex()
                                         .gap_1()
                                         .justify_between()
-                                        .child(Label::new("Show Symbol Outline"))
+                                        .child(Label::localized("Show Symbol Outline"))
                                         .child(ui::KeyBinding::for_action_in(
                                             &zed_actions::outline::ToggleOutline,
                                             &focus_handle,
@@ -6556,7 +6552,7 @@ pub fn render_breadcrumb_text(
                                             .pt_1()
                                             .border_t_1()
                                             .border_color(cx.theme().colors().border_variant)
-                                            .child(Label::new("Right-Click to Copy Path")),
+                                            .child(Label::localized("Right-Click to Copy Path")),
                                     )
                                 })
                                 .into_any_element()
@@ -8104,17 +8100,16 @@ impl Element for EditorElement {
                         })
                         .unwrap_or_else(|| (Vec::new(), Vec::new(), HashMap::default()));
 
-                    let (selections, active_rows, newest_selection_head) = self
-                        .layout_selections(
-                            start_anchor,
-                            end_anchor,
-                            &local_selections,
-                            &snapshot,
-                            start_row,
-                            end_row,
-                            window,
-                            cx,
-                        );
+                    let (selections, active_rows, newest_selection_head) = self.layout_selections(
+                        start_anchor,
+                        end_anchor,
+                        &local_selections,
+                        &snapshot,
+                        start_row,
+                        end_row,
+                        window,
+                        cx,
+                    );
 
                     // relative rows are based on newest selection, even outside the visible area
                     let current_selection_head = self.editor.update(cx, |editor, cx| {
@@ -8726,12 +8721,7 @@ impl Element for EditorElement {
                     );
 
                     let test_indicators = if gutter_settings.runnables {
-                        self.layout_run_indicators(
-                            &gutter,
-                            &run_indicator_rows,
-                            window,
-                            cx,
-                        )
+                        self.layout_run_indicators(&gutter, &run_indicator_rows, window, cx)
                     } else {
                         Vec::new()
                     };

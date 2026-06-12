@@ -203,6 +203,10 @@ impl PickerDelegate for ScopeSelectorDelegate {
         "Select snippet scope...".into()
     }
 
+    fn localized_placeholder_text(&self) -> Option<&'static str> {
+        Some("Select snippet scope...")
+    }
+
     fn match_count(&self) -> usize {
         self.matches.len()
     }

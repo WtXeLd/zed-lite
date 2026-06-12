@@ -9,6 +9,7 @@ use gpui::{
     WeakEntity,
 };
 use language::{Anchor, Buffer, BufferId};
+use localization::{UiLanguage, current_language};
 use project::{ConflictRegion, ConflictSet, ConflictSetUpdate, ProjectItem as _};
 use std::{ops::Range, sync::Arc};
 use ui::prelude::*;
@@ -286,6 +287,10 @@ fn render_conflict_buttons(
     editor: WeakEntity<Editor>,
     cx: &mut BlockContext,
 ) -> AnyElement {
+    let use_branch_label = |branch_name: &str| match current_language(cx.app) {
+        UiLanguage::ChineseSimplified => format!("使用 {}", branch_name),
+        UiLanguage::English => format!("Use {}", branch_name),
+    };
     let element = h_flex()
         .id(cx.block_id)
         .h(cx.line_height)
@@ -293,7 +298,7 @@ fn render_conflict_buttons(
         .gap_1()
         .bg(cx.theme().colors().editor_background)
         .child(
-            Button::new("head", format!("Use {}", conflict.ours_branch_name))
+            Button::new("head", use_branch_label(&conflict.ours_branch_name))
                 .label_size(LabelSize::Small)
                 .on_click({
                     let editor = editor.clone();
@@ -312,7 +317,7 @@ fn render_conflict_buttons(
                 }),
         )
         .child(
-            Button::new("origin", format!("Use {}", conflict.theirs_branch_name))
+            Button::new("origin", use_branch_label(&conflict.theirs_branch_name))
                 .label_size(LabelSize::Small)
                 .on_click({
                     let editor = editor.clone();
@@ -331,7 +336,7 @@ fn render_conflict_buttons(
                 }),
         )
         .child(
-            Button::new("both", "Use Both")
+            Button::localized("both", "Use Both")
                 .label_size(LabelSize::Small)
                 .on_click({
                     let editor = editor.clone();
@@ -427,8 +432,7 @@ pub(crate) fn resolve_conflict(
     })
 }
 
-pub struct MergeConflictIndicator {
-}
+pub struct MergeConflictIndicator {}
 
 impl MergeConflictIndicator {
     pub fn new(_workspace: &Workspace, _cx: &mut Context<Self>) -> Self {

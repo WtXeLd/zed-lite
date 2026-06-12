@@ -83,7 +83,15 @@ impl Workspace {
                             log::error!("Task spawn failed: {e:#}");
                             _ = workspace.update(cx, |w, cx| {
                                 let id = NotificationId::unique::<ResolvedTask>();
-                                w.show_toast(Toast::new(id, format!("Task spawn failed: {e}")), cx);
+                                let message = match localization::current_language(cx) {
+                                    localization::UiLanguage::ChineseSimplified => {
+                                        format!("任务启动失败：{e}")
+                                    }
+                                    localization::UiLanguage::English => {
+                                        format!("Task spawn failed: {e}")
+                                    }
+                                };
+                                w.show_toast(Toast::new(id, message), cx);
                             })
                         }
                         None => log::debug!("Task spawn got cancelled"),

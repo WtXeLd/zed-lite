@@ -373,6 +373,10 @@ impl PickerDelegate for StashListDelegate {
         "Select a stash…".into()
     }
 
+    fn localized_placeholder_text(&self) -> Option<&'static str> {
+        Some("Select a stash…")
+    }
+
     fn match_count(&self) -> usize {
         self.matches.len()
     }
@@ -531,9 +535,11 @@ impl PickerDelegate for StashListDelegate {
             let focus_handle = self.focus_handle.clone();
             IconButton::new(("view-stash", ix), IconName::Eye)
                 .icon_size(IconSize::Small)
-                .tooltip(move |_, cx| {
-                    Tooltip::for_action_in("View Stash", &ShowStashItem, &focus_handle, cx)
-                })
+                .tooltip(Tooltip::for_localized_action_title_in(
+                    "View Stash",
+                    &ShowStashItem,
+                    &focus_handle,
+                ))
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.delegate.show_stash_at(ix, window, cx);
                 }))
@@ -543,9 +549,11 @@ impl PickerDelegate for StashListDelegate {
             let focus_handle = self.focus_handle.clone();
             IconButton::new(("pop-stash", ix), IconName::MaximizeAlt)
                 .icon_size(IconSize::Small)
-                .tooltip(move |_, cx| {
-                    Tooltip::for_action_in("Pop Stash", &menu::SecondaryConfirm, &focus_handle, cx)
-                })
+                .tooltip(Tooltip::for_localized_action_title_in(
+                    "Pop Stash",
+                    &menu::SecondaryConfirm,
+                    &focus_handle,
+                ))
                 .on_click(|_, window, cx| {
                     window.dispatch_action(menu::SecondaryConfirm.boxed_clone(), cx);
                 })
@@ -555,9 +563,11 @@ impl PickerDelegate for StashListDelegate {
             let focus_handle = self.focus_handle.clone();
             IconButton::new(("drop-stash", ix), IconName::Trash)
                 .icon_size(IconSize::Small)
-                .tooltip(move |_, cx| {
-                    Tooltip::for_action_in("Drop Stash", &DropStashItem, &focus_handle, cx)
-                })
+                .tooltip(Tooltip::for_localized_action_title_in(
+                    "Drop Stash",
+                    &DropStashItem,
+                    &focus_handle,
+                ))
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.delegate.drop_stash_at(ix, window, cx);
                 }))
@@ -638,7 +648,7 @@ impl PickerDelegate for StashListDelegate {
                 .border_t_1()
                 .border_color(cx.theme().colors().border_variant)
                 .child(
-                    Button::new("drop-stash", "Drop")
+                    Button::localized("drop-stash", "Drop")
                         .key_binding(
                             KeyBinding::for_action_in(
                                 &stash_picker::DropStashItem,
@@ -652,7 +662,7 @@ impl PickerDelegate for StashListDelegate {
                         }),
                 )
                 .child(
-                    Button::new("view-stash", "View")
+                    Button::localized("view-stash", "View")
                         .key_binding(
                             KeyBinding::for_action_in(
                                 &stash_picker::ShowStashItem,
@@ -668,7 +678,7 @@ impl PickerDelegate for StashListDelegate {
                         })),
                 )
                 .child(
-                    Button::new("pop-stash", "Pop")
+                    Button::localized("pop-stash", "Pop")
                         .key_binding(
                             KeyBinding::for_action_in(&menu::SecondaryConfirm, &focus_handle, cx)
                                 .map(|kb| kb.size(rems_from_px(12.))),
@@ -678,7 +688,7 @@ impl PickerDelegate for StashListDelegate {
                         }),
                 )
                 .child(
-                    Button::new("apply-stash", "Apply")
+                    Button::localized("apply-stash", "Apply")
                         .key_binding(
                             KeyBinding::for_action_in(&menu::Confirm, &focus_handle, cx)
                                 .map(|kb| kb.size(rems_from_px(12.))),

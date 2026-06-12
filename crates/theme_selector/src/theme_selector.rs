@@ -382,6 +382,10 @@ impl PickerDelegate for ThemeSelectorDelegate {
         "Select Theme...".into()
     }
 
+    fn localized_placeholder_text(&self) -> Option<&'static str> {
+        Some("Select Theme...")
+    }
+
     fn match_count(&self) -> usize {
         self.matches.len()
     }
@@ -539,7 +543,7 @@ impl PickerDelegate for ThemeSelectorDelegate {
                 .border_t_1()
                 .border_color(cx.theme().colors().border_variant)
                 .child(
-                    Button::new("docs", "View Theme Docs")
+                    Button::localized("docs", "View Theme Docs")
                         .end_icon(
                             Icon::new(IconName::ArrowUpRight)
                                 .size(IconSize::Small)
@@ -550,7 +554,7 @@ impl PickerDelegate for ThemeSelectorDelegate {
                         })),
                 )
                 .child(
-                    Button::new("more-themes", "Install Themes").on_click(cx.listener({
+                    Button::localized("more-themes", "Install Themes").on_click(cx.listener({
                         move |_, _, window, cx| {
                             window.dispatch_action(
                                 Box::new(Extensions {

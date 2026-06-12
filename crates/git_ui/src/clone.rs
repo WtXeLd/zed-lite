@@ -71,9 +71,19 @@ pub fn clone_and_open(
                 cx.update(|window, cx| {
                     window.prompt(
                         gpui::PromptLevel::Info,
-                        &format!("Git Clone: {}", repo_name),
+                        &match localization::current_language(cx) {
+                            localization::UiLanguage::ChineseSimplified => {
+                                format!("Git 克隆：{}", repo_name)
+                            }
+                            localization::UiLanguage::English => {
+                                format!("Git Clone: {}", repo_name)
+                            }
+                        },
                         None,
-                        &["Add repo to project", "Open repo in new project"],
+                        &[
+                            localization::prompt_button(cx, "Add repo to project"),
+                            localization::prompt_button(cx, "Open repo in new project"),
+                        ],
                         cx,
                     )
                 })

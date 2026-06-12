@@ -25,7 +25,7 @@ impl Render for CsvPreviewView {
                         .text_ui(cx)
                         .font_buffer(cx)
                         .text_color(cx.theme().colors().text_muted)
-                        .child("No CSV content to display")
+                        .child(localization::t(cx, "No CSV content to display"))
                         .into_any_element()
                 } else {
                     self.create_table(&self.column_widths.widths, cx)

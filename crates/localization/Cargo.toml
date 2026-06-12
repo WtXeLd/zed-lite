@@ -1,5 +1,5 @@
 [package]
-name = "ui_input"
+name = "localization"
 version = "0.1.0"
 edition.workspace = true
 publish.workspace = true
@@ -9,15 +9,8 @@ license = "GPL-3.0-or-later"
 workspace = true
 
 [lib]
-path = "src/ui_input.rs"
+path = "src/localization.rs"
 
 [dependencies]
-component.workspace = true
 gpui.workspace = true
-localization.workspace = true
-ui.workspace = true
-
-[features]
-lite = []
-test-support = []
-default = []
+settings.workspace = true

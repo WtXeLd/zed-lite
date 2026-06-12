@@ -1,4 +1,3 @@
-
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -632,6 +631,10 @@ impl PickerDelegate for RecentProjectsDelegate {
         "Search projects…".into()
     }
 
+    fn localized_placeholder_text(&self) -> Option<&'static str> {
+        Some("Search projects…")
+    }
+
     fn render_editor(
         &self,
         editor: &Arc<dyn ErasedEditor>,
@@ -959,7 +962,7 @@ impl PickerDelegate for RecentProjectsDelegate {
                     .child(
                         IconButton::new(("remove-folder", worktree_id.to_usize()), IconName::Close)
                             .icon_size(IconSize::Small)
-                            .tooltip(Tooltip::text("Remove Folder from Project"))
+                            .tooltip(Tooltip::localized_text("Remove Folder from Project"))
                             .on_click(cx.listener(move |picker, _, window, cx| {
                                 let Some(workspace) = picker.delegate.workspace.upgrade() else {
                                     return;
@@ -1111,7 +1114,7 @@ impl PickerDelegate for RecentProjectsDelegate {
                         this.child(
                             IconButton::new("remove_open_project", IconName::Close)
                                 .icon_size(IconSize::Small)
-                                .tooltip(Tooltip::text("Remove Project from Window"))
+                                .tooltip(Tooltip::localized_text("Remove Project from Window"))
                                 .on_click({
                                     let project_group_key = project_group_key.clone();
                                     cx.listener(move |picker, _, window, cx| {
@@ -1246,7 +1249,7 @@ impl PickerDelegate for RecentProjectsDelegate {
                     .child(
                         IconButton::new("delete", IconName::Close)
                             .icon_size(IconSize::Small)
-                            .tooltip(Tooltip::text("Delete from Recent Projects"))
+                            .tooltip(Tooltip::localized_text("Delete from Recent Projects"))
                             .on_click(cx.listener(move |this, _event, window, cx| {
                                 cx.stop_propagation();
                                 window.prevent_default();
@@ -1323,7 +1326,7 @@ impl PickerDelegate for RecentProjectsDelegate {
                                     .w_full()
                                     .gap_1()
                                     .justify_between()
-                                    .child(Label::new("Open Local Folders"))
+                                    .child(Label::localized("Open Local Folders"))
                                     .child(KeyBinding::for_action_in(
                                         &workspace::Open {
                                             create_new_window: self.create_new_window,
@@ -1362,7 +1365,7 @@ impl PickerDelegate for RecentProjectsDelegate {
 
         let secondary_footer_actions: Option<AnyElement> = match selected_entry {
             Some(ProjectPickerEntry::OpenFolder { .. }) => Some(
-                Button::new("remove_selected", "Remove Folder")
+                Button::localized("remove_selected", "Remove Folder")
                     .key_binding(KeyBinding::for_action_in(
                         &RemoveSelected,
                         &focus_handle,
@@ -1374,7 +1377,7 @@ impl PickerDelegate for RecentProjectsDelegate {
                     .into_any_element(),
             ),
             Some(ProjectPickerEntry::ProjectGroup(_)) if !is_current_workspace_entry => Some(
-                Button::new("remove_selected", "Remove from Window")
+                Button::localized("remove_selected", "Remove from Window")
                     .key_binding(KeyBinding::for_action_in(
                         &RemoveSelected,
                         &focus_handle,
@@ -1386,7 +1389,7 @@ impl PickerDelegate for RecentProjectsDelegate {
                     .into_any_element(),
             ),
             Some(ProjectPickerEntry::RecentProject(_)) => Some(
-                Button::new("delete_recent", "Delete")
+                Button::localized("delete_recent", "Delete")
                     .key_binding(KeyBinding::for_action_in(
                         &RemoveSelected,
                         &focus_handle,
@@ -1418,7 +1421,7 @@ impl PickerDelegate for RecentProjectsDelegate {
                                 let window_project_groups = self.window_project_groups.clone();
                                 let selected_index = self.selected_index;
                                 let filtered_entries = self.filtered_entries.clone();
-                                Button::new("move_to_new_window", "New Window")
+                                Button::localized("move_to_new_window", "New Window")
                                     .key_binding(KeyBinding::for_action_in(
                                         &menu::SecondaryConfirm,
                                         &focus_handle,
@@ -1438,7 +1441,7 @@ impl PickerDelegate for RecentProjectsDelegate {
                             })
                         })
                         .child(
-                            Button::new("activate", "Activate")
+                            Button::localized("activate", "Activate")
                                 .key_binding(KeyBinding::for_action_in(
                                     &menu::Confirm,
                                     &focus_handle,
@@ -1450,7 +1453,7 @@ impl PickerDelegate for RecentProjectsDelegate {
                         )
                     } else {
                         this.child(
-                            Button::new("open_new_window", "New Window")
+                            Button::localized("open_new_window", "New Window")
                                 .key_binding(KeyBinding::for_action_in(
                                     &menu::SecondaryConfirm,
                                     &focus_handle,
@@ -1461,7 +1464,7 @@ impl PickerDelegate for RecentProjectsDelegate {
                                 }),
                         )
                         .child(
-                            Button::new("open_here", "Open")
+                            Button::localized("open_here", "Open")
                                 .key_binding(KeyBinding::for_action_in(
                                     &menu::Confirm,
                                     &focus_handle,
@@ -1483,7 +1486,7 @@ impl PickerDelegate for RecentProjectsDelegate {
                             y: px(-2.0),
                         })
                         .trigger(
-                            Button::new("actions-trigger", "Actions")
+                            Button::localized("actions-trigger", "Actions")
                                 .selected_style(ButtonStyle::Tinted(TintColor::Accent))
                                 .key_binding(KeyBinding::for_action_in(
                                     &ToggleActionsMenu,
@@ -1998,9 +2001,9 @@ mod tests {
     }
 
     fn project_group(index: usize) -> ProjectGroupKey {
-        ProjectGroupKey::new(
-            PathList::new(&[PathBuf::from(format!("/this-window/project-{index}"))]),
-        )
+        ProjectGroupKey::new(PathList::new(&[PathBuf::from(format!(
+            "/this-window/project-{index}"
+        ))]))
     }
 
     fn recent_workspace(index: usize) -> RecentWorkspace {

@@ -13,8 +13,7 @@ use cli::{CliRequest, CliResponse, IpcHandshake, ipc::IpcOneShotServer};
 use parking_lot::Mutex;
 use std::{
     collections::{BTreeMap, BTreeSet},
-    env,
-    fs, io,
+    env, fs, io,
     path::{Path, PathBuf},
     process::ExitStatus,
     sync::Arc,
@@ -1310,5 +1309,4 @@ mod mac_os {
             }
         }
     }
-
 }

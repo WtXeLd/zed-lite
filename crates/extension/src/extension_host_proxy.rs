@@ -70,7 +70,6 @@ impl ExtensionHostProxy {
     pub fn register_snippet_proxy(&self, proxy: impl ExtensionSnippetProxy) {
         self.snippet_proxy.write().replace(Arc::new(proxy));
     }
-
 }
 
 pub trait ExtensionThemeProxy: Send + Sync + 'static {

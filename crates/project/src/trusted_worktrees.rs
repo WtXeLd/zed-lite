@@ -54,10 +54,7 @@ pub fn init(db_trusted_paths: DbTrustedPaths, cx: &mut App) {
 }
 
 /// An initialization call to set up trust global for a project.
-pub fn track_worktree_trust(
-    worktree_store: Entity<WorktreeStore>,
-    cx: &mut App,
-) {
+pub fn track_worktree_trust(worktree_store: Entity<WorktreeStore>, cx: &mut App) {
     match TrustedWorktrees::try_get_global(cx) {
         Some(trusted_worktrees) => {
             trusted_worktrees.update(cx, |trusted_worktrees, cx| {
@@ -382,7 +379,7 @@ impl TrustedWorktreesStore {
         //
         // See module documentation for details on trust level.
         if let Some(trusted_paths) = self.trusted_paths.get(&weak_worktree_store) {
-        let auto_trusted = worktree_store.read_with(cx, |worktree_store, cx| {
+            let auto_trusted = worktree_store.read_with(cx, |worktree_store, cx| {
                 trusted_paths.iter().any(|trusted_path| match trusted_path {
                     PathTrust::Worktree(worktree_id) => worktree_store
                         .worktree_for_id(*worktree_id, cx)

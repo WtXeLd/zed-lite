@@ -183,7 +183,9 @@ fn remove_language_settings_keys(settings: &mut serde_json::Value) {
         }
     }
 
-    for override_key in ["dev", "nightly", "preview", "stable", "linux", "macos", "windows"] {
+    for override_key in [
+        "dev", "nightly", "preview", "stable", "linux", "macos", "windows",
+    ] {
         if let Some(override_settings) = settings.pointer_mut(&format!("/{override_key}")) {
             remove_object_keys(Some(override_settings), &["instrumentation"]);
             remove_language_settings_keys(override_settings);

@@ -681,7 +681,6 @@ impl BufferStore {
                 buffer.set_capability(Capability::ReadOnly, cx)
             });
         }
-
     }
 
     pub fn discard_incomplete(&mut self) {
@@ -845,7 +844,9 @@ impl BufferStore {
     ) -> Task<Result<ProjectTransaction>> {
         let _ = (message, push_to_history, cx);
         debug_panic!("remote project transactions have been removed");
-        Task::ready(Err(anyhow!("remote project transactions have been removed")))
+        Task::ready(Err(anyhow!(
+            "remote project transactions have been removed"
+        )))
     }
 
     pub fn wait_for_remote_buffer(
@@ -879,7 +880,6 @@ impl BufferStore {
         }
         serialized_transaction
     }
-
 }
 
 impl OpenBuffer {

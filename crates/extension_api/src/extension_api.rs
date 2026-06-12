@@ -411,7 +411,6 @@ impl wit::Guest for Component {
     ) -> Result<(), String> {
         extension().index_docs(provider, package, database)
     }
-
 }
 
 /// The ID of a language server.

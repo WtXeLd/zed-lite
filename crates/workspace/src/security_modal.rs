@@ -77,9 +77,16 @@ impl Render for SecurityModal {
 
         let restricted_count = self.restricted_paths.len();
         let header_label: SharedString = if restricted_count == 1 {
-            "Unrecognized Project".into()
+            localization::t(cx, "Unrecognized Project")
         } else {
-            format!("Unrecognized Projects ({})", restricted_count).into()
+            match localization::current_language(cx) {
+                localization::UiLanguage::ChineseSimplified => {
+                    format!("未识别的项目（{}）", restricted_count).into()
+                }
+                localization::UiLanguage::English => {
+                    format!("Unrecognized Projects ({})", restricted_count).into()
+                }
+            }
         };
 
         let trust_label = self.build_trust_label();
@@ -150,13 +157,13 @@ impl Render for SecurityModal {
                     .child(
                         v_flex()
                             .child(
-                                Label::new(
+                                Label::localized(
                                     "Untrusted projects are opened in Restricted Mode to protect your system.",
                                 )
                                 .color(Color::Muted),
                             )
                             .child(
-                                Label::new(
+                                Label::localized(
                                     "Review .zed/settings.json for any extensions or commands configured by this project.",
                                 )
                                 .color(Color::Muted),
@@ -164,10 +171,10 @@ impl Render for SecurityModal {
                     )
                     .child(
                         v_flex()
-                            .child(Label::new("Restricted Mode prevents:").color(Color::Muted))
-                            .child(ListBulletItem::new("Project settings from being applied"))
-                            .child(ListBulletItem::new("Language servers from running"))
-                            .child(ListBulletItem::new("MCP Server integrations from installing")),
+                            .child(Label::localized("Restricted Mode prevents:").color(Color::Muted))
+                            .child(ListBulletItem::localized("Project settings from being applied"))
+                            .child(ListBulletItem::localized("Language servers from running"))
+                            .child(ListBulletItem::localized("MCP Server integrations from installing")),
                     )
                     .map(|this| match trust_label {
                         Some(trust_label) => this.child(
@@ -191,7 +198,7 @@ impl Render for SecurityModal {
                     .gap_1()
                     .justify_end()
                     .child(
-                        Button::new("rm", "Stay in Restricted Mode")
+                        Button::localized("rm", "Stay in Restricted Mode")
                             .key_binding(
                                 KeyBinding::for_action(
                                     &ToggleWorktreeSecurity,
@@ -206,7 +213,7 @@ impl Render for SecurityModal {
                             })),
                     )
                     .child(
-                        Button::new("tc", "Trust and Continue")
+                        Button::localized("tc", "Trust and Continue")
                             .style(ButtonStyle::Filled)
                             .layer(ui::ElevationIndex::ModalSurface)
                             .key_binding(
@@ -224,10 +231,7 @@ impl Render for SecurityModal {
 }
 
 impl SecurityModal {
-    pub fn new(
-        worktree_store: WeakEntity<WorktreeStore>,
-        cx: &mut Context<Self>,
-    ) -> Self {
+    pub fn new(worktree_store: WeakEntity<WorktreeStore>, cx: &mut Context<Self>) -> Self {
         let mut this = Self {
             worktree_store,
             restricted_paths: HashMap::default(),

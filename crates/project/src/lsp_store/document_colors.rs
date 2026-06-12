@@ -3,15 +3,9 @@ use std::{sync::Arc, time::Duration};
 use anyhow::{Context as _, Result};
 use clock::Global;
 use collections::{HashMap, HashSet};
-use futures::{
-    FutureExt as _,
-    future::Shared,
-};
+use futures::{FutureExt as _, future::Shared};
 use gpui::{AppContext as _, AsyncApp, Context, Entity, SharedString, Task};
-use language::{
-    Buffer, LocalFile as _, PointUtf16, point_to_lsp,
-    proto::serialize_lsp_edit,
-};
+use language::{Buffer, LocalFile as _, PointUtf16, point_to_lsp, proto::serialize_lsp_edit};
 use lsp::LanguageServerId;
 use rpc::{TypedEnvelope, proto};
 use settings::Settings as _;
@@ -207,9 +201,7 @@ impl LspStore {
                 .map(|presentation| ColorPresentation {
                     label: SharedString::from(presentation.label),
                     text_edit: presentation.text_edit,
-                    additional_text_edits: presentation
-                        .additional_text_edits
-                        .unwrap_or_default(),
+                    additional_text_edits: presentation.additional_text_edits.unwrap_or_default(),
                 })
                 .collect();
             color.resolved = true;

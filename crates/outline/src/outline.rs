@@ -265,6 +265,10 @@ impl PickerDelegate for OutlineViewDelegate {
         "Search buffer symbols...".into()
     }
 
+    fn localized_placeholder_text(&self) -> Option<&'static str> {
+        Some("Search buffer symbols...")
+    }
+
     fn match_count(&self) -> usize {
         self.matches.len()
     }

@@ -20,7 +20,7 @@ impl CsvPreviewView {
 
         let view = cx.entity();
         let alignment_dropdown_menu = ContextMenu::build(window, cx, |menu, _window, _cx| {
-            menu.entry("Top", None, {
+            menu.entry_localized("Top", None, {
                 let view = view.clone();
                 move |_window, cx| {
                     view.update(cx, |this, cx| {
@@ -29,7 +29,7 @@ impl CsvPreviewView {
                     });
                 }
             })
-            .entry("Center", None, {
+            .entry_localized("Center", None, {
                 let view = view.clone();
                 move |_window, cx| {
                     view.update(cx, |this, cx| {
@@ -55,7 +55,7 @@ impl CsvPreviewView {
                         div()
                             .text_sm()
                             .text_color(cx.theme().colors().text_muted)
-                            .child("Text Alignment:"),
+                            .child(localization::t(cx, "Text Alignment:")),
                     )
                     .child(
                         DropdownMenu::new(
@@ -64,7 +64,7 @@ impl CsvPreviewView {
                             alignment_dropdown_menu,
                         )
                         .trigger_size(ButtonSize::Compact)
-                        .trigger_tooltip(Tooltip::text(
+                        .trigger_tooltip(Tooltip::localized_text(
                             "Choose vertical text alignment within cells",
                         )),
                     ),
@@ -79,7 +79,7 @@ impl CsvPreviewView {
                     div()
                         .text_sm()
                         .text_color(cx.theme().colors().text_muted)
-                        .child("Dev-only:"),
+                        .child(localization::t(cx, "Dev-only:")),
                 )
                 .child(create_dev_only_popover_menu(cx)),
         );
@@ -98,7 +98,7 @@ fn create_dev_only_popover_menu(
     PopoverMenu::new("debug-options-menu")
         .trigger_with_tooltip(
             IconButton::new("debug-options-trigger", IconName::Settings).icon_size(IconSize::Small),
-            Tooltip::text(
+            Tooltip::localized_text(
                 "Dev-only section used for debugging purposes.\nWill be removed on public release of CSV feature"
             ),
         )
@@ -108,9 +108,9 @@ fn create_dev_only_popover_menu(
                 let view = view_entity.read(cx);
                 let settings = view.settings.clone();
                 Some(ContextMenu::build(window, cx, |menu, _, _| {
-                    menu.header("Rendering Mode")
+                    menu.header_localized("Rendering Mode")
                         .toggleable_entry(
-                            "Variable Height",
+                            localization::t(cx, "Variable Height"),
                             settings.rendering_with == RowRenderMechanism::VariableList,
                             IconPosition::Start,
                             None,
@@ -127,7 +127,7 @@ fn create_dev_only_popover_menu(
                             },
                         )
                         .toggleable_entry(
-                            "Uniform Height",
+                            localization::t(cx, "Uniform Height"),
                             settings.rendering_with == RowRenderMechanism::UniformList,
                             IconPosition::Start,
                             None,
@@ -145,7 +145,7 @@ fn create_dev_only_popover_menu(
                         )
                         .separator()
                         .toggleable_entry(
-                            "Show perf metrics",
+                            localization::t(cx, "Show perf metrics"),
                             settings.show_perf_metrics_overlay,
                             IconPosition::Start,
                             None,

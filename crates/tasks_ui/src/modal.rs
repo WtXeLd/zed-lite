@@ -35,6 +35,7 @@ pub struct TasksModalDelegate {
     prompt: String,
     task_contexts: Arc<TaskContexts>,
     placeholder_text: Arc<str>,
+    localized_placeholder_text: &'static str,
 }
 
 /// Task template amendments to do before resolving the context.
@@ -59,6 +60,14 @@ impl TasksModalDelegate {
         } else {
             Arc::from("Find a task, or run a command")
         };
+        let localized_placeholder_text = if let Some(TaskOverrides {
+            reveal_target: Some(RevealTarget::Center),
+        }) = &task_overrides
+        {
+            "Find a task, or run a command in the central pane"
+        } else {
+            "Find a task, or run a command"
+        };
         Self {
             task_store,
             workspace,
@@ -71,6 +80,7 @@ impl TasksModalDelegate {
             task_contexts,
             task_overrides,
             placeholder_text,
+            localized_placeholder_text,
         }
     }
 
@@ -150,11 +160,9 @@ impl TasksModal {
             )
             .modal(is_modal)
         });
-        let _subscriptions = [
-            cx.subscribe(&picker, |_, _, _: &DismissEvent, cx| {
-                cx.emit(DismissEvent);
-            }),
-        ];
+        let _subscriptions = [cx.subscribe(&picker, |_, _, _: &DismissEvent, cx| {
+            cx.emit(DismissEvent);
+        })];
 
         Self {
             picker,
@@ -245,6 +253,10 @@ impl PickerDelegate for TasksModalDelegate {
 
     fn placeholder_text(&self, _window: &mut Window, _: &mut App) -> Arc<str> {
         self.placeholder_text.clone()
+    }
+
+    fn localized_placeholder_text(&self) -> Option<&'static str> {
+        Some(self.localized_placeholder_text)
     }
 
     fn update_matches(
@@ -555,7 +567,7 @@ impl PickerDelegate for TasksModalDelegate {
                                         .checked_sub(1);
                                     picker.refresh(window, cx);
                                 }))
-                                .tooltip(|_, cx| Tooltip::simple("Delete from Recent Tasks", cx)),
+                                .tooltip(Tooltip::localized_text("Delete from Recent Tasks")),
                         );
                         item.end_slot_on_hover(delete_button)
                     } else {

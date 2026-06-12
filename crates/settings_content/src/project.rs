@@ -63,7 +63,6 @@ pub struct ProjectSettingsContent {
 
     /// The list of custom Git hosting providers.
     pub git_hosting_providers: Option<ExtendingVec<GitHostingProviderConfig>>,
-
 }
 
 /// When to scan content of linked directories.

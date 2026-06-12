@@ -22,11 +22,12 @@ pub struct InputField {
     /// An optional label for the text field.
     ///
     /// Its position is determined by the [`FieldLabelLayout`].
-    label: Option<SharedString>,
+    label: Option<localization::LocalizableString>,
     /// The size of the label text.
     label_size: LabelSize,
     /// The placeholder text for the text field.
-    placeholder: SharedString,
+    placeholder: localization::LocalizableString,
+    resolved_placeholder: SharedString,
 
     editor: Arc<dyn ErasedEditor>,
     /// An optional icon that is displayed at the start of the text field.
@@ -51,16 +52,41 @@ impl Focusable for InputField {
 
 impl InputField {
     pub fn new(window: &mut Window, cx: &mut App, placeholder_text: &str) -> Self {
+        Self::with_placeholder(
+            window,
+            cx,
+            localization::LocalizableString::User(placeholder_text.to_string().into()),
+        )
+    }
+
+    pub fn localized(window: &mut Window, cx: &mut App, placeholder_text: &'static str) -> Self {
+        Self::with_placeholder(window, cx, localization::ui(placeholder_text))
+    }
+
+    fn with_placeholder(
+        window: &mut Window,
+        cx: &mut App,
+        placeholder: localization::LocalizableString,
+    ) -> Self {
         let editor_factory = crate::ERASED_EDITOR_FACTORY
             .get()
             .expect("ErasedEditorFactory to be initialized");
         let editor = (editor_factory)(window, cx);
-        editor.set_placeholder_text(placeholder_text, window, cx);
+        let resolved_placeholder = placeholder.clone().resolve(cx);
+        match placeholder {
+            localization::LocalizableString::User(_) => {
+                editor.set_placeholder_text(resolved_placeholder.as_ref(), window, cx);
+            }
+            localization::LocalizableString::Ui(source) => {
+                editor.set_localized_placeholder_text(source, window, cx);
+            }
+        }
 
         Self {
             label: None,
             label_size: LabelSize::Small,
-            placeholder: SharedString::new(placeholder_text),
+            placeholder,
+            resolved_placeholder,
             editor,
             start_icon: None,
             min_width: px(192.).into(),
@@ -76,7 +102,12 @@ impl InputField {
     }
 
     pub fn label(mut self, label: impl Into<SharedString>) -> Self {
-        self.label = Some(label.into());
+        self.label = Some(localization::LocalizableString::User(label.into()));
+        self
+    }
+
+    pub fn localized_label(mut self, label: &'static str) -> Self {
+        self.label = Some(localization::ui(label));
         self
     }
 
@@ -138,6 +169,19 @@ impl Render for InputField {
         if let Some(masked) = self.masked {
             self.editor.set_masked(masked, window, cx);
         }
+        let resolved_placeholder = self.placeholder.clone().resolve(cx);
+        if self.resolved_placeholder != resolved_placeholder {
+            match self.placeholder {
+                localization::LocalizableString::User(_) => {
+                    self.editor
+                        .set_placeholder_text(resolved_placeholder.as_ref(), window, cx)
+                }
+                localization::LocalizableString::Ui(source) => self
+                    .editor
+                    .set_localized_placeholder_text(source, window, cx),
+            }
+            self.resolved_placeholder = resolved_placeholder;
+        }
 
         let theme_color = cx.theme().colors();
 
@@ -158,12 +202,12 @@ impl Render for InputField {
         };
 
         v_flex()
-            .id(self.placeholder.clone())
+            .id(self.resolved_placeholder.clone())
             .w_full()
             .gap_1()
             .when_some(self.label.clone(), |this, label| {
                 this.child(
-                    Label::new(label)
+                    Label::new(label.resolve(cx))
                         .size(self.label_size)
                         .color(Color::Default),
                 )
@@ -203,7 +247,11 @@ impl Render for InputField {
                             )
                             .icon_size(IconSize::Small)
                             .icon_color(Color::Muted)
-                            .tooltip(Tooltip::text(if is_masked { "Show" } else { "Hide" }))
+                            .tooltip(Tooltip::localized_text(if is_masked {
+                                "Show"
+                            } else {
+                                "Hide"
+                            }))
                             .on_click(cx.listener(
                                 |this, _, window, cx| {
                                     if let Some(ref mut masked) = this.masked {

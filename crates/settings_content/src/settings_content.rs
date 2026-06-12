@@ -105,6 +105,35 @@ pub enum HideMouseMode {
     OnTypingAndAction,
 }
 
+/// The language used for Zed Lite's UI and application menus.
+///
+/// Default: en
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Default,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Eq,
+    JsonSchema,
+    MergeFrom,
+    strum::VariantArray,
+    strum::VariantNames,
+)]
+pub enum UiLanguage {
+    /// English UI strings.
+    #[default]
+    #[serde(rename = "en")]
+    #[strum(serialize = "English")]
+    English,
+    /// Simplified Chinese UI strings.
+    #[serde(rename = "zh-CN", alias = "zh_cn", alias = "zh-cn")]
+    #[strum(serialize = "中文")]
+    ChineseSimplified,
+}
+
 #[with_fallible_options]
 #[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct SettingsContent {
@@ -140,6 +169,13 @@ pub struct SettingsContent {
     ///
     /// Default: VSCode
     pub base_keymap: Option<BaseKeymapContent>,
+
+    /// The language used for Zed Lite's UI and application menus.
+    ///
+    /// Supported values: "en", "zh-CN"
+    ///
+    /// Default: en
+    pub ui_language: Option<UiLanguage>,
 
     /// Configuration for Diagnostics-related features.
     pub diagnostics: Option<DiagnosticsSettingsContent>,

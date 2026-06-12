@@ -1166,7 +1166,6 @@ pub trait ProjectItem: Item {
     }
 }
 
-#[derive(Debug)]
 #[cfg(any(test, feature = "test-support"))]
 pub mod test {
     use super::{Item, ItemEvent, SerializableItem, TabContentParams};

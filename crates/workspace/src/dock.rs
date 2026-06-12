@@ -313,6 +313,10 @@ impl DockPosition {
         }
     }
 
+    fn localized_label(&self, cx: &App) -> SharedString {
+        localization::t(cx, self.label())
+    }
+
     pub fn axis(&self) -> Axis {
         match self {
             Self::Left | Self::Right => Axis::Horizontal,
@@ -1214,8 +1218,15 @@ impl Render for PanelButtons {
                 let (action, tooltip) = if is_active_button {
                     let action = dock.toggle_action();
 
-                    let tooltip: SharedString =
-                        format!("Close {} Dock", dock.position.label()).into();
+                    let tooltip: SharedString = match localization::current_language(cx) {
+                        localization::UiLanguage::ChineseSimplified => {
+                            format!("关闭{}停靠栏", dock.position.localized_label(cx))
+                        }
+                        localization::UiLanguage::English => {
+                            format!("Close {} Dock", dock.position.label())
+                        }
+                    }
+                    .into();
 
                     (action, tooltip)
                 } else {
@@ -1243,8 +1254,16 @@ impl Render for PanelButtons {
                                     if panel.position_is_valid(position, cx) {
                                         let is_current = position == dock_position;
                                         let panel = panel.clone();
+                                        let label = match localization::current_language(cx) {
+                                            localization::UiLanguage::ChineseSimplified => {
+                                                format!("停靠到{}", position.localized_label(cx))
+                                            }
+                                            localization::UiLanguage::English => {
+                                                format!("Dock {}", position.label())
+                                            }
+                                        };
                                         menu = menu.toggleable_entry(
-                                            format!("Dock {}", position.label()),
+                                            label,
                                             is_current,
                                             IconPosition::Start,
                                             None,

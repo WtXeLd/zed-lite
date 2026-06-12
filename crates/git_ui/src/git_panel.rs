@@ -36,8 +36,8 @@ use git::{
 use gpui::{
     AbsoluteLength, Action, Anchor, AsyncWindowContext, Bounds, ClickEvent, DismissEvent, Empty,
     Entity, EventEmitter, FocusHandle, Focusable, KeyContext, MouseButton, MouseDownEvent, Point,
-    PromptLevel, ScrollStrategy, Subscription, Task, TaskExt, TextStyle, UniformListScrollHandle,
-    WeakEntity, actions, anchored, deferred, point, size, uniform_list,
+    PromptButton, PromptLevel, ScrollStrategy, Subscription, Task, TaskExt, TextStyle,
+    UniformListScrollHandle, WeakEntity, actions, anchored, deferred, point, size, uniform_list,
 };
 use itertools::Itertools;
 use language::{Buffer, File};
@@ -126,7 +126,7 @@ actions!(
 );
 
 fn prompt<T>(
-    msg: &str,
+    msg: &'static str,
     detail: Option<&str>,
     window: &mut Window,
     cx: &mut App,
@@ -134,7 +134,12 @@ fn prompt<T>(
 where
     T: IntoEnumIterator + VariantNames + 'static,
 {
-    let rx = window.prompt(PromptLevel::Info, msg, detail, T::VARIANTS, cx);
+    let message = localization::t(cx, msg);
+    let answers = T::VARIANTS
+        .iter()
+        .map(|variant| localization::prompt_button(cx, *variant))
+        .collect::<Vec<PromptButton>>();
+    let rx = window.prompt(PromptLevel::Info, message.as_ref(), detail, &answers, cx);
     cx.spawn(async move |_| Ok(T::iter().nth(rx.await?).unwrap()))
 }
 
@@ -164,33 +169,37 @@ fn git_panel_context_menu(
     ContextMenu::build(window, cx, move |context_menu, _, _| {
         context_menu
             .context(focus_handle)
-            .action_disabled_when(
+            .action_disabled_when_localized(
                 !state.has_unstaged_changes,
                 "Stage All",
                 StageAll.boxed_clone(),
             )
-            .action_disabled_when(
+            .action_disabled_when_localized(
                 !state.has_staged_changes,
                 "Unstage All",
                 UnstageAll.boxed_clone(),
             )
             .separator()
-            .action_disabled_when(
+            .action_disabled_when_localized(
                 !(state.has_new_changes || state.has_tracked_changes),
                 "Stash All",
                 StashAll.boxed_clone(),
             )
-            .action_disabled_when(!state.has_stash_items, "Stash Pop", StashPop.boxed_clone())
-            .action("View Stash", zed_actions::git::ViewStash.boxed_clone())
+            .action_disabled_when_localized(
+                !state.has_stash_items,
+                "Stash Pop",
+                StashPop.boxed_clone(),
+            )
+            .action_localized("View Stash", zed_actions::git::ViewStash.boxed_clone())
             .separator()
-            .action("Open Diff", project_diff::Diff.boxed_clone())
+            .action_localized("Open Diff", project_diff::Diff.boxed_clone())
             .separator()
-            .action_disabled_when(
+            .action_disabled_when_localized(
                 !state.has_tracked_changes,
                 "Discard Tracked Changes",
                 RestoreTrackedFiles.boxed_clone(),
             )
-            .action_disabled_when(
+            .action_disabled_when_localized(
                 !state.has_new_changes,
                 "Trash Untracked Files",
                 TrashUntrackedFiles.boxed_clone(),
@@ -1319,17 +1328,31 @@ impl GitPanel {
             } else {
                 let prompt = window.prompt(
                     PromptLevel::Warning,
-                    &format!(
-                        "Are you sure you want to discard changes to {}?",
-                        MarkdownInlineCode(
-                            entry
-                                .repo_path
-                                .file_name()
-                                .unwrap_or(entry.repo_path.display(path_style).as_ref())
+                    &match localization::current_language(cx) {
+                        localization::UiLanguage::ChineseSimplified => format!(
+                            "确定要丢弃对 {} 的更改吗？",
+                            MarkdownInlineCode(
+                                entry
+                                    .repo_path
+                                    .file_name()
+                                    .unwrap_or(entry.repo_path.display(path_style).as_ref())
+                            ),
                         ),
-                    ),
+                        localization::UiLanguage::English => format!(
+                            "Are you sure you want to discard changes to {}?",
+                            MarkdownInlineCode(
+                                entry
+                                    .repo_path
+                                    .file_name()
+                                    .unwrap_or(entry.repo_path.display(path_style).as_ref())
+                            ),
+                        ),
+                    },
                     None,
-                    &["Discard Changes", "Cancel"],
+                    &[
+                        localization::prompt_button(cx, "Discard Changes"),
+                        localization::prompt_button(cx, "Cancel"),
+                    ],
                     cx,
                 );
                 cx.background_spawn(prompt)
@@ -1411,11 +1434,26 @@ impl GitPanel {
             if !entry.status.is_created() {
                 self.perform_checkout(vec![entry.clone()], window, cx);
             } else {
-                let prompt = prompt(&format!("Trash {}?", filename), None, window, cx);
+                let message = match localization::current_language(cx) {
+                    localization::UiLanguage::ChineseSimplified => {
+                        format!("要将 {} 移到废纸篓吗？", filename)
+                    }
+                    localization::UiLanguage::English => format!("Trash {}?", filename),
+                };
+                let prompt = window.prompt(
+                    PromptLevel::Info,
+                    &message,
+                    None,
+                    &[
+                        localization::prompt_button(cx, "Trash"),
+                        localization::prompt_button(cx, "Cancel"),
+                    ],
+                    cx,
+                );
                 cx.spawn_in(window, async move |_, cx| {
                     match prompt.await? {
-                        TrashCancel::Trash => {}
-                        TrashCancel::Cancel => return Ok(()),
+                        0 => {}
+                        _ => return Ok(()),
                     }
                     let task = workspace.update(cx, |workspace, cx| {
                         workspace
@@ -2184,8 +2222,14 @@ impl GitPanel {
         let Some(active_repository) = self.active_repository.clone() else {
             return;
         };
-        let error_spawn = |message, window: &mut Window, cx: &mut App| {
-            let prompt = window.prompt(PromptLevel::Warning, message, None, &["Ok"], cx);
+        let error_spawn = |message: &'static str, window: &mut Window, cx: &mut App| {
+            let prompt = window.prompt(
+                PromptLevel::Warning,
+                localization::t(cx, message).as_ref(),
+                None,
+                &[localization::prompt_button(cx, "Ok")],
+                cx,
+            );
             cx.spawn(async move |_| {
                 prompt.await.ok();
             })
@@ -2334,12 +2378,19 @@ impl GitPanel {
                     Uncommit,
                     Cancel,
                 }
-                let detail = format!(
-                    "This commit was already pushed to {}.",
-                    pushed_to.into_iter().join(", ")
-                );
+                let pushed_to = pushed_to.into_iter().join(", ");
                 let result = cx
-                    .update(|window, cx| prompt("Are you sure?", Some(&detail), window, cx))?
+                    .update(|window, cx| {
+                        let detail = match localization::current_language(cx) {
+                            localization::UiLanguage::ChineseSimplified => {
+                                format!("此提交已经推送到 {}。", pushed_to)
+                            }
+                            localization::UiLanguage::English => {
+                                format!("This commit was already pushed to {}.", pushed_to)
+                            }
+                        };
+                        prompt("Are you sure?", Some(&detail), window, cx)
+                    })?
                     .await?;
 
                 match result {
@@ -2412,7 +2463,7 @@ impl GitPanel {
             let selection = cx
                 .update(|window, cx| {
                     picker_prompt::prompt(
-                        "Pick which remote to fetch",
+                        localization::t(cx, "Pick which remote to fetch").as_ref(),
                         remotes.iter().map(|r| r.name()).collect(),
                         workspace,
                         window,
@@ -2503,9 +2554,9 @@ impl GitPanel {
         } else if worktrees.is_empty() {
             let result = window.prompt(
                 PromptLevel::Warning,
-                "Unable to initialize a git repository",
-                Some("Open a directory first"),
-                &["Ok"],
+                localization::t(cx, "Unable to initialize a git repository").as_ref(),
+                Some(localization::t(cx, "Open a directory first").as_ref()),
+                &[localization::prompt_button(cx, "Ok")],
                 cx,
             );
             cx.background_executor()
@@ -2531,7 +2582,11 @@ impl GitPanel {
                 })
                 .collect_vec();
             let prompt = picker_prompt::prompt(
-                "Where would you like to initialize this git repository?",
+                localization::t(
+                    cx,
+                    "Where would you like to initialize this git repository?",
+                )
+                .as_ref(),
                 worktree_directories,
                 self.workspace.clone(),
                 window,
@@ -2875,7 +2930,7 @@ impl GitPanel {
             let selection = cx
                 .update(|window, cx| {
                     picker_prompt::prompt(
-                        "Pick which remote to push to",
+                        localization::t(cx, "Pick which remote to push to").as_ref(),
                         current_remotes.clone(),
                         workspace,
                         window,
@@ -3531,11 +3586,15 @@ impl GitPanel {
         };
 
         workspace.update(cx, |workspace, cx| {
-            let SuccessMessage { message, style } = remote_output::format_output(&action, info);
+            let SuccessMessage { message, style } = remote_output::format_output_for_language(
+                &action,
+                info,
+                localization::current_language(cx),
+            );
             let workspace_weak = cx.weak_entity();
             let operation = action.name();
 
-            let status_toast = StatusToast::new(message, cx, move |this, _cx| {
+            let status_toast = StatusToast::new(message, cx, move |this, cx| {
                 use remote_output::SuccessStyle::*;
                 match style {
                     Toast => this.icon(
@@ -3549,16 +3608,22 @@ impl GitPanel {
                                 .size(IconSize::Small)
                                 .color(Color::Muted),
                         )
-                        .action("View Log", move |window, cx| {
-                            let output = output.clone();
-                            let output =
-                                format!("stdout:\n{}\nstderr:\n{}", output.stdout, output.stderr);
-                            workspace_weak
-                                .update(cx, move |workspace, cx| {
-                                    open_output(operation, workspace, &output, window, cx)
-                                })
-                                .ok();
-                        }),
+                        .localized_action(
+                            "View Log",
+                            move |window, cx| {
+                                let output = output.clone();
+                                let output = format!(
+                                    "stdout:\n{}\nstderr:\n{}",
+                                    output.stdout, output.stderr
+                                );
+                                workspace_weak
+                                    .update(cx, move |workspace, cx| {
+                                        open_output(operation, workspace, &output, window, cx)
+                                    })
+                                    .ok();
+                            },
+                            cx,
+                        ),
                     PushPrLink { text, link } => this
                         .icon(
                             Icon::new(IconName::GitBranch)
@@ -3847,7 +3912,7 @@ impl GitPanel {
                     h_flex()
                         .gap_1p5()
                         .child(
-                            Button::new("changes", "View Diff")
+                            Button::localized("changes", "View Diff")
                                 .label_size(LabelSize::Small)
                                 .color(Color::Muted)
                                 .start_icon(
@@ -3855,7 +3920,7 @@ impl GitPanel {
                                         .size(IconSize::Small)
                                         .color(Color::Muted),
                                 )
-                                .tooltip(Tooltip::for_action_title_in(
+                                .tooltip(Tooltip::for_localized_action_title_in(
                                     "View Diff",
                                     &Diff,
                                     &self.focus_handle,
@@ -3876,7 +3941,7 @@ impl GitPanel {
                                         diff_stat_total.added as usize,
                                         diff_stat_total.deleted as usize,
                                     )
-                                    .tooltip("Total tracked changes"),
+                                    .localized_tooltip("Total tracked changes"),
                                 )
                             },
                         ),
@@ -3886,7 +3951,7 @@ impl GitPanel {
                         .gap_1()
                         .child(self.render_ellipsis_menu("overflow_menu"))
                         .child(
-                            Button::new("stage_unstage_all", text)
+                            Button::localized("stage_unstage_all", text)
                                 .label_size(LabelSize::Small)
                                 .layer(ElevationIndex::ModalSurface)
                                 .style(ButtonStyle::Filled)
@@ -4208,13 +4273,13 @@ impl GitPanel {
                     .overflow_hidden()
                     .max_w(relative(0.85))
                     .child(
-                        Label::new("This will update your most recent commit.")
+                        Label::localized("This will update your most recent commit.")
                             .size(LabelSize::Small)
                             .truncate(),
                     ),
             )
             .child(
-                Button::new("cancel", "Cancel")
+                Button::localized("cancel", "Cancel")
                     .label_size(LabelSize::Small)
                     .layer(ElevationIndex::ModalSurface)
                     .on_click(cx.listener(|this, _, _, cx| this.set_amend_pending(false, cx))),
@@ -4312,7 +4377,7 @@ impl GitPanel {
                             IconButton::new("git-graph-button", IconName::GitGraph)
                                 .icon_size(IconSize::Small)
                                 .tooltip(|_window, cx| {
-                                    Tooltip::for_action(
+                                    Tooltip::for_localized_action(
                                         "Open Git Graph",
                                         &crate::git_graph::Open,
                                         cx,
@@ -4333,10 +4398,17 @@ impl GitPanel {
         let tab = |id: ElementId,
                    active: bool,
                    show_changes: bool,
-                   label: SharedString,
+                   label: &'static str,
                    set_active_tab: GitPanelTab,
                    tooltip_action: Box<dyn Action>| {
             let focus_handle = focus_handle.clone();
+            let localized_label = localization::t(cx, label);
+            let tooltip = match localization::current_language(cx) {
+                localization::UiLanguage::ChineseSimplified => {
+                    format!("切换到{}标签页", localized_label)
+                }
+                localization::UiLanguage::English => format!("Toggle {} Tab", label),
+            };
 
             h_flex()
                 .cursor_pointer()
@@ -4352,7 +4424,7 @@ impl GitPanel {
                     s.bg(cx.theme().colors().editor_background.opacity(0.6))
                         .border_color(cx.theme().colors().border.opacity(0.6))
                 })
-                .child(Label::new(label.clone()).when(!active, |this| this.color(Color::Muted)))
+                .child(Label::new(localized_label).when(!active, |this| this.color(Color::Muted)))
                 .when(show_changes && self.changes_count > 0, |this| {
                     this.child(
                         Label::new(format!("({})", self.changes_count))
@@ -4361,7 +4433,7 @@ impl GitPanel {
                     )
                 })
                 .tooltip(Tooltip::for_action_title_in(
-                    format!("Toggle {} Tab", label),
+                    tooltip,
                     tooltip_action.as_ref(),
                     &focus_handle,
                 ))
@@ -4378,7 +4450,7 @@ impl GitPanel {
                 ElementId::Name("changes-tab".into()),
                 active_tab == GitPanelTab::Changes,
                 true,
-                "Changes".into(),
+                "Changes",
                 GitPanelTab::Changes,
                 ActivateChangesTab.boxed_clone(),
             ))
@@ -4387,7 +4459,7 @@ impl GitPanel {
                 ElementId::Name("history-tab".into()),
                 active_tab != GitPanelTab::Changes,
                 false,
-                "History".into(),
+                "History",
                 GitPanelTab::History,
                 ActivateHistoryTab.boxed_clone(),
             ))
@@ -4402,7 +4474,7 @@ impl GitPanel {
                     h_flex()
                         .flex_1()
                         .justify_center()
-                        .child(Label::new("Loading Commit History…").color(Color::Muted)),
+                        .child(Label::localized("Loading Commit History…").color(Color::Muted)),
                 )
             }
         })
@@ -4813,10 +4885,10 @@ impl GitPanel {
         v_flex()
             .gap_1()
             .items_center()
-            .child(Label::new("No changes to commit").color(Color::Muted))
+            .child(Label::localized("No changes to commit").color(Color::Muted))
             .when(show_branch_diff, |this| {
                 this.child(
-                    Button::new("view_branch_diff", "View Branch Diff")
+                    Button::localized("view_branch_diff", "View Branch Diff")
                         .label_size(LabelSize::Small)
                         .style(ButtonStyle::Outlined)
                         .on_click(move |_, _, cx| {
@@ -4854,7 +4926,7 @@ impl GitPanel {
                         .flex_wrap()
                         .gap_1()
                         .child(
-                            Button::new("trust_directory", "Trust Directory")
+                            Button::localized("trust_directory", "Trust Directory")
                             .label_size(LabelSize::Small)
                             .layer(ElevationIndex::ModalSurface)
                             .style(ButtonStyle::Filled)
@@ -4868,7 +4940,7 @@ impl GitPanel {
                             )
                     )
                     .child(
-                        Button::new("learn_more", "Learn More")
+                        Button::localized("learn_more", "Learn More")
                             .label_size(LabelSize::Small)
                             .style(ButtonStyle::Outlined)
                             .end_icon(Icon::new(IconName::ArrowUpRight).size(IconSize::Small).color(Color::Muted))
@@ -4884,9 +4956,9 @@ impl GitPanel {
             v_flex()
                 .gap_1()
                 .items_center()
-                .child(Label::new("No Git Repositories").color(Color::Muted))
+                .child(Label::localized("No Git Repositories").color(Color::Muted))
                 .child(
-                    Button::new("initialize_repository", "Initialize Repository")
+                    Button::localized("initialize_repository", "Initialize Repository")
                         .label_size(LabelSize::Small)
                         .style(ButtonStyle::Outlined)
                         .tooltip(Tooltip::for_action_title_in(
@@ -5248,18 +5320,18 @@ impl GitPanel {
                 .context(self.focus_handle.clone())
                 .action(stage_title, ToggleStaged.boxed_clone())
                 .action(restore_title, git::RestoreFile::default().boxed_clone())
-                .action_disabled_when(
+                .action_disabled_when_localized(
                     !is_created,
                     "Add to .gitignore",
                     git::AddToGitignore.boxed_clone(),
                 )
                 .separator()
-                .action("Open Diff", menu::Confirm.boxed_clone())
-                .action("Open Diff (File)", menu::SecondaryConfirm.boxed_clone())
+                .action_localized("Open Diff", menu::Confirm.boxed_clone())
+                .action_localized("Open Diff (File)", menu::SecondaryConfirm.boxed_clone())
                 .when(!is_created, |context_menu| {
                     context_menu
                         .separator()
-                        .action("View File History", Box::new(git::FileHistory))
+                        .action_localized("View File History", Box::new(git::FileHistory))
                 })
         });
         self.selected_entry = Some(ix);
@@ -6362,7 +6434,7 @@ impl RenderOnce for PanelRepoFooter {
             })
             .trigger_with_tooltip(
                 branch_selector_button,
-                Tooltip::for_action_title("Switch Branch", &zed_actions::git::Switch),
+                Tooltip::for_localized_action_title("Switch Branch", &zed_actions::git::Switch),
             )
             .anchor(Anchor::BottomLeft)
             .offset(gpui::Point {
@@ -6420,7 +6492,17 @@ impl RenderOnce for PanelRepoFooter {
                             .tooltip({
                                 let display_name = display_name.clone();
                                 move |_, cx| {
-                                    Tooltip::simple(format!("Switch to {}", display_name), cx)
+                                    Tooltip::simple(
+                                        match localization::current_language(cx) {
+                                            localization::UiLanguage::ChineseSimplified => {
+                                                format!("切换到 {}", display_name)
+                                            }
+                                            localization::UiLanguage::English => {
+                                                format!("Switch to {}", display_name)
+                                            }
+                                        },
+                                        cx,
+                                    )
                                 }
                             })
                             .on_click(move |_, _, cx| {
@@ -6720,7 +6802,15 @@ pub(crate) fn open_output(
     let editor = cx.new(|cx| {
         let mut editor = Editor::for_buffer(buffer, None, window, cx);
         editor.buffer().update(cx, |buffer, cx| {
-            buffer.set_title(format!("Output from git {operation}"), cx);
+            buffer.set_title(
+                match localization::current_language(cx) {
+                    localization::UiLanguage::ChineseSimplified => {
+                        format!("git {operation} 的输出")
+                    }
+                    localization::UiLanguage::English => format!("Output from git {operation}"),
+                },
+                cx,
+            );
         });
         editor.set_read_only(true);
         editor
@@ -6746,21 +6836,32 @@ pub(crate) fn show_error_toast(
         cx.defer(move |cx| {
             workspace.update(cx, |workspace, cx| {
                 let workspace_weak = cx.weak_entity();
-                let toast = StatusToast::new(format!("git {} failed", action), cx, |this, _cx| {
+                let message = match localization::current_language(cx) {
+                    localization::UiLanguage::ChineseSimplified => {
+                        format!("git {} 失败", action)
+                    }
+                    localization::UiLanguage::English => format!("git {} failed", action),
+                };
+                let toast_message = message.clone();
+                let toast = StatusToast::new(toast_message, cx, |this, cx| {
                     this.icon(
                         Icon::new(IconName::XCircle)
                             .size(IconSize::Small)
                             .color(Color::Error),
                     )
-                    .action("View Log", move |window, cx| {
-                        let message = message.clone();
-                        let action = action.clone();
-                        workspace_weak
-                            .update(cx, move |workspace, cx| {
-                                open_output(action, workspace, &message, window, cx)
-                            })
-                            .ok();
-                    })
+                    .localized_action(
+                        "View Log",
+                        move |window, cx| {
+                            let message = message.clone();
+                            let action = action.clone();
+                            workspace_weak
+                                .update(cx, move |workspace, cx| {
+                                    open_output(action, workspace, &message, window, cx)
+                                })
+                                .ok();
+                        },
+                        cx,
+                    )
                 });
                 workspace.toggle_status_toast(toast, cx)
             });
@@ -6793,13 +6894,12 @@ mod tests {
         status::{StatusCode, UnmergedStatus, UnmergedStatusCode},
     };
     use gpui::{TestAppContext, UpdateGlobal, VisualTestContext, px};
-    use indoc::indoc;
     use project::FakeFs;
     use serde_json::json;
     use settings::SettingsStore;
     use theme::LoadThemes;
     use util::path;
-    use util::rel_path::rel_path;
+    use util::rel_path::{RelPath, rel_path};
 
     use workspace::MultiWorkspace;
 

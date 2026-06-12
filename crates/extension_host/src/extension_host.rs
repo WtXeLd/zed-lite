@@ -13,18 +13,18 @@ use async_compression::futures::bufread::GzipDecoder;
 use async_tar::Archive;
 use client::{Client, telemetry::Telemetry};
 use collections::{BTreeMap, BTreeSet, FxHashSet, HashSet, btree_map};
-pub use extension::{ExtensionManifest, ExtensionProvides};
 use extension::extension_builder::{CompileExtensionOptions, ExtensionBuilder};
 use extension::{
     ExtensionEvents, ExtensionGrammarProxy, ExtensionHostProxy, ExtensionLanguageProxy,
     ExtensionLanguageServerProxy, ExtensionSnippetProxy, ExtensionThemeProxy,
 };
+pub use extension::{ExtensionManifest, ExtensionProvides};
 #[cfg(feature = "full")]
 use fs::RenameOptions;
 use fs::{Fs, RemoveOptions};
+use futures::future::join_all;
 #[cfg(feature = "full")]
 use futures::io::BufReader;
-use futures::future::join_all;
 use futures::{
     Future, FutureExt as _, StreamExt as _,
     channel::{
@@ -33,12 +33,12 @@ use futures::{
     },
     select_biased,
 };
-#[cfg(feature = "full")]
-use gpui::{AsyncApp, WeakEntity};
 use gpui::{
     App, AppContext as _, Context, Entity, EventEmitter, Global, Task, TaskExt, UpdateGlobal as _,
     actions,
 };
+#[cfg(feature = "full")]
+use gpui::{AsyncApp, WeakEntity};
 #[cfg(feature = "full")]
 use http_client::AsyncBody;
 use http_client::{HttpClient, HttpClientWithUrl};
@@ -65,12 +65,9 @@ use task::TaskTemplates;
 #[cfg(feature = "full")]
 use url::Url;
 use util::{ResultExt, rel_path::PathExt};
-use wasm_host::{
-    WasmExtension, WasmHost,
-    wit::is_supported_wasm_api_version,
-};
 #[cfg(feature = "full")]
 use wasm_host::wit::wasm_api_version_range;
+use wasm_host::{WasmExtension, WasmHost, wit::is_supported_wasm_api_version};
 
 pub use extension::{
     ExtensionLibraryKind, GrammarManifestEntry, OldExtensionManifest, SchemaVersion,
@@ -106,15 +103,8 @@ const CURRENT_SCHEMA_VERSION: SchemaVersion = SchemaVersion(1);
 ///
 /// These snippets should no longer be downloaded or loaded, because their
 /// functionality has been integrated into the core editor.
-static SUPPRESSED_EXTENSIONS: LazyLock<FxHashSet<&str>> = LazyLock::new(|| {
-    FxHashSet::from_iter([
-        "snippets",
-        "ruff",
-        "ty",
-        "basedpyright",
-        "basher",
-    ])
-});
+static SUPPRESSED_EXTENSIONS: LazyLock<FxHashSet<&str>> =
+    LazyLock::new(|| FxHashSet::from_iter(["snippets", "ruff", "ty", "basedpyright", "basher"]));
 
 /// Returns the [`SchemaVersion`] range that is compatible with this version of Zed.
 pub fn schema_version_range() -> RangeInclusive<SchemaVersion> {
@@ -543,24 +533,24 @@ impl ExtensionStore {
 
         #[cfg(feature = "full")]
         {
-        let version = CURRENT_SCHEMA_VERSION.to_string();
-        let mut query = vec![("max_schema_version", version.as_str())];
-        if let Some(search) = search {
-            query.push(("filter", search));
-        }
+            let version = CURRENT_SCHEMA_VERSION.to_string();
+            let mut query = vec![("max_schema_version", version.as_str())];
+            if let Some(search) = search {
+                query.push(("filter", search));
+            }
 
-        let provides_filter = provides_filter.map(|provides_filter| {
-            provides_filter
-                .iter()
-                .map(|provides| provides.to_string())
-                .collect::<Vec<_>>()
-                .join(",")
-        });
-        if let Some(provides_filter) = provides_filter.as_deref() {
-            query.push(("provides", provides_filter));
-        }
+            let provides_filter = provides_filter.map(|provides_filter| {
+                provides_filter
+                    .iter()
+                    .map(|provides| provides.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            });
+            if let Some(provides_filter) = provides_filter.as_deref() {
+                query.push(("provides", provides_filter));
+            }
 
-        self.fetch_extensions_from_api("/extensions", &query, cx)
+            self.fetch_extensions_from_api("/extensions", &query, cx)
         }
     }
 
@@ -640,35 +630,35 @@ impl ExtensionStore {
 
         #[cfg(feature = "full")]
         {
-        if cfg!(test) {
-            return;
-        }
-
-        let extension_settings = ExtensionSettings::get_global(cx);
-
-        let extensions_to_install = extension_settings
-            .auto_install_extensions
-            .keys()
-            .filter(|extension_id| extension_settings.should_auto_install(extension_id))
-            .filter(|extension_id| {
-                let is_already_installed = self
-                    .extension_index
-                    .extensions
-                    .contains_key(extension_id.as_ref());
-                !is_already_installed && !SUPPRESSED_EXTENSIONS.contains(extension_id.as_ref())
-            })
-            .cloned()
-            .collect::<Vec<_>>();
-
-        cx.spawn(async move |this, cx| {
-            for extension_id in extensions_to_install {
-                this.update(cx, |this, cx| {
-                    this.install_latest_extension(extension_id.clone(), cx);
-                })
-                .ok();
+            if cfg!(test) {
+                return;
             }
-        })
-        .detach();
+
+            let extension_settings = ExtensionSettings::get_global(cx);
+
+            let extensions_to_install = extension_settings
+                .auto_install_extensions
+                .keys()
+                .filter(|extension_id| extension_settings.should_auto_install(extension_id))
+                .filter(|extension_id| {
+                    let is_already_installed = self
+                        .extension_index
+                        .extensions
+                        .contains_key(extension_id.as_ref());
+                    !is_already_installed && !SUPPRESSED_EXTENSIONS.contains(extension_id.as_ref())
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+
+            cx.spawn(async move |this, cx| {
+                for extension_id in extensions_to_install {
+                    this.update(cx, |this, cx| {
+                        this.install_latest_extension(extension_id.clone(), cx);
+                    })
+                    .ok();
+                }
+            })
+            .detach();
         }
     }
 
@@ -681,9 +671,9 @@ impl ExtensionStore {
 
         #[cfg(feature = "full")]
         {
-        let task = self.fetch_extensions_with_update_available(cx);
-        cx.spawn(async move |this, cx| Self::upgrade_extensions(this, task.await?, cx).await)
-            .detach();
+            let task = self.fetch_extensions_with_update_available(cx);
+            cx.spawn(async move |this, cx| Self::upgrade_extensions(this, task.await?, cx).await)
+                .detach();
         }
     }
 
@@ -897,37 +887,37 @@ impl ExtensionStore {
 
         #[cfg(feature = "full")]
         {
-        log::info!("installing extension {extension_id} latest version");
+            log::info!("installing extension {extension_id} latest version");
 
-        let schema_versions = schema_version_range();
-        let wasm_api_versions = wasm_api_version_range(ReleaseChannel::global(cx));
+            let schema_versions = schema_version_range();
+            let wasm_api_versions = wasm_api_version_range(ReleaseChannel::global(cx));
 
-        let Some(url) = self
-            .http_client
-            .build_zed_api_url(
-                &format!("/extensions/{extension_id}/download"),
-                &[
-                    ("min_schema_version", &schema_versions.start().to_string()),
-                    ("max_schema_version", &schema_versions.end().to_string()),
-                    (
-                        "min_wasm_api_version",
-                        &wasm_api_versions.start().to_string(),
-                    ),
-                    ("max_wasm_api_version", &wasm_api_versions.end().to_string()),
-                ],
+            let Some(url) = self
+                .http_client
+                .build_zed_api_url(
+                    &format!("/extensions/{extension_id}/download"),
+                    &[
+                        ("min_schema_version", &schema_versions.start().to_string()),
+                        ("max_schema_version", &schema_versions.end().to_string()),
+                        (
+                            "min_wasm_api_version",
+                            &wasm_api_versions.start().to_string(),
+                        ),
+                        ("max_wasm_api_version", &wasm_api_versions.end().to_string()),
+                    ],
+                )
+                .log_err()
+            else {
+                return;
+            };
+
+            self.install_or_upgrade_extension_at_endpoint(
+                extension_id,
+                url,
+                ExtensionOperation::Install,
+                cx,
             )
-            .log_err()
-        else {
-            return;
-        };
-
-        self.install_or_upgrade_extension_at_endpoint(
-            extension_id,
-            url,
-            ExtensionOperation::Install,
-            cx,
-        )
-        .detach_and_log_err(cx);
+            .detach_and_log_err(cx);
         }
     }
 
@@ -1332,7 +1322,6 @@ impl ExtensionStore {
                     ));
                 }
             }
-
         }
 
         self.wasm_extensions
@@ -1553,7 +1542,6 @@ impl ExtensionStore {
                             );
                         }
                     }
-
                 }
 
                 this.wasm_extensions.extend(wasm_extensions);
@@ -1759,7 +1747,6 @@ impl ExtensionStore {
 
         Ok(())
     }
-
 }
 
 fn load_plugin_queries(root_path: &Path) -> LanguageQueries {

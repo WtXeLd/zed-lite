@@ -1501,10 +1501,7 @@ impl Vim {
         let editor = editor.read(cx);
         let editor_mode = editor.mode();
 
-        if editor_mode.is_full()
-            && !newest_selection_empty
-            && self.mode == Mode::Normal
-        {
+        if editor_mode.is_full() && !newest_selection_empty && self.mode == Mode::Normal {
             if preserve_selection {
                 self.switch_mode(Mode::Visual, true, window, cx);
             } else {
@@ -2181,7 +2178,6 @@ impl Vim {
                 if self.mode == Mode::Replace {
                     self.multi_replace(text, window, cx)
                 }
-
             }
         }
     }

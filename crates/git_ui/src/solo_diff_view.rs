@@ -550,7 +550,7 @@ impl Render for SoloDiffStyleToolbar {
                 IconButton::new("solo-diff-unified", IconName::DiffUnified)
                     .icon_size(IconSize::Small)
                     .toggle_state(diff_view_style == DiffViewStyle::Unified)
-                    .tooltip(Tooltip::text("Unified"))
+                    .tooltip(Tooltip::localized_text("Unified"))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.set_diff_view_style(DiffViewStyle::Unified, window, cx);
                     })),
@@ -559,7 +559,7 @@ impl Render for SoloDiffStyleToolbar {
                 IconButton::new("solo-diff-split", split_icon)
                     .icon_size(IconSize::Small)
                     .toggle_state(diff_view_style == DiffViewStyle::Split)
-                    .tooltip(Tooltip::text("Split"))
+                    .tooltip(Tooltip::localized_text("Split"))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.set_diff_view_style(DiffViewStyle::Split, window, cx);
                     })),
@@ -663,8 +663,8 @@ impl Render for SoloDiffGitToolbar {
                 h_group_sm()
                     .when(button_states.selection, |el| {
                         el.child(
-                            Button::new("stage", "Toggle Staged")
-                                .tooltip(Tooltip::for_action_title_in(
+                            Button::localized("stage", "Toggle Staged")
+                                .tooltip(Tooltip::for_localized_action_title_in(
                                     "Toggle Staged",
                                     &ToggleStaged,
                                     &focus_handle,
@@ -677,8 +677,8 @@ impl Render for SoloDiffGitToolbar {
                     })
                     .when(!button_states.selection, |el| {
                         el.child(
-                            Button::new("stage", "Stage")
-                                .tooltip(Tooltip::for_action_title_in(
+                            Button::localized("stage", "Stage")
+                                .tooltip(Tooltip::for_localized_action_title_in(
                                     "Stage and go to next hunk",
                                     &StageAndNext,
                                     &focus_handle,
@@ -689,8 +689,8 @@ impl Render for SoloDiffGitToolbar {
                                 })),
                         )
                         .child(
-                            Button::new("unstage", "Unstage")
-                                .tooltip(Tooltip::for_action_title_in(
+                            Button::localized("unstage", "Unstage")
+                                .tooltip(Tooltip::for_localized_action_title_in(
                                     "Unstage and go to next hunk",
                                     &UnstageAndNext,
                                     &focus_handle,
@@ -702,8 +702,8 @@ impl Render for SoloDiffGitToolbar {
                         )
                     })
                     .child(
-                        Button::new("restore", "Restore")
-                            .tooltip(Tooltip::for_action_title_in(
+                        Button::localized("restore", "Restore")
+                            .tooltip(Tooltip::for_localized_action_title_in(
                                 "Restore selected hunk",
                                 &Restore,
                                 &focus_handle,
@@ -719,7 +719,7 @@ impl Render for SoloDiffGitToolbar {
                     .child(
                         IconButton::new("up", IconName::ArrowUp)
                             .shape(IconButtonShape::Square)
-                            .tooltip(Tooltip::for_action_title_in(
+                            .tooltip(Tooltip::for_localized_action_title_in(
                                 "Go to previous hunk",
                                 &GoToPreviousHunk,
                                 &focus_handle,
@@ -732,7 +732,7 @@ impl Render for SoloDiffGitToolbar {
                     .child(
                         IconButton::new("down", IconName::ArrowDown)
                             .shape(IconButtonShape::Square)
-                            .tooltip(Tooltip::for_action_title_in(
+                            .tooltip(Tooltip::for_localized_action_title_in(
                                 "Go to next hunk",
                                 &GoToHunk,
                                 &focus_handle,
@@ -747,8 +747,8 @@ impl Render for SoloDiffGitToolbar {
             .child(
                 h_group_sm()
                     .child(
-                        Button::new("stage-file", "Stage File")
-                            .tooltip(Tooltip::for_action_title_in(
+                        Button::localized("stage-file", "Stage File")
+                            .tooltip(Tooltip::for_localized_action_title_in(
                                 "Stage file",
                                 &StageFile,
                                 &focus_handle,
@@ -759,8 +759,8 @@ impl Render for SoloDiffGitToolbar {
                             ),
                     )
                     .child(
-                        Button::new("unstage-file", "Unstage File")
-                            .tooltip(Tooltip::for_action_title_in(
+                        Button::localized("unstage-file", "Unstage File")
+                            .tooltip(Tooltip::for_localized_action_title_in(
                                 "Unstage file",
                                 &UnstageFile,
                                 &focus_handle,
@@ -772,8 +772,8 @@ impl Render for SoloDiffGitToolbar {
                     )
                     .child(Divider::vertical())
                     .child(
-                        Button::new("commit", "Commit")
-                            .tooltip(Tooltip::for_action_title_in(
+                        Button::localized("commit", "Commit")
+                            .tooltip(Tooltip::for_localized_action_title_in(
                                 "Commit",
                                 &Commit,
                                 &focus_handle,

@@ -206,7 +206,7 @@ impl Component for AlertModal {
                                         h_flex()
                                             .gap_1()
                                             .child(Icon::new(IconName::Warning).color(Color::Warning))
-                                            .child(Headline::new("Unrecognized Workspace").size(HeadlineSize::Small))
+                                            .child(Headline::localized("Unrecognized Workspace").size(HeadlineSize::Small))
                                     )
                                     .child(
                                         h_flex()
@@ -214,17 +214,14 @@ impl Component for AlertModal {
                                             .child(Label::new("~/projects/my-project").color(Color::Muted))
                                     )
                             )
-                            .child(
-                                "Untrusted workspaces are opened in Restricted Mode to protect your system.
-Review .zed/settings.json for any extensions or commands configured by this project.",
-                            )
+                            .child(Label::localized("Untrusted workspaces are opened in Restricted Mode to protect your system. Review .zed/settings.json for any extensions or commands configured by this project."))
                             .child(
                                 v_flex()
                                     .mt_1()
-                                    .child(Label::new("Restricted mode prevents:").color(Color::Muted))
-                                    .child(ListBulletItem::new("Project settings from being applied"))
-                                    .child(ListBulletItem::new("Language servers from running"))
-                                    .child(ListBulletItem::new("MCP integrations from installing"))
+                                    .child(Label::localized("Restricted mode prevents:").color(Color::Muted))
+                                    .child(ListBulletItem::localized("Project settings from being applied"))
+                                    .child(ListBulletItem::localized("Language servers from running"))
+                                    .child(ListBulletItem::localized("MCP integrations from installing"))
                             )
                             .footer(
                                 h_flex()
@@ -232,13 +229,13 @@ Review .zed/settings.json for any extensions or commands configured by this proj
                                     .justify_between()
                                     .child(
                                         Checkbox::new("trust-parent", ToggleState::Unselected)
-                                            .label("Trust all projects in parent directory")
+                                            .localized_label("Trust all projects in parent directory")
                                     )
                                     .child(
                                         h_flex()
                                             .gap_1()
-                                            .child(Button::new("restricted", "Stay in Restricted Mode").color(Color::Muted))
-                                            .child(Button::new("trust", "Trust and Continue").style(ButtonStyle::Filled))
+                                            .child(Button::localized("restricted", "Stay in Restricted Mode").color(Color::Muted))
+                                            .child(Button::localized("trust", "Trust and Continue").style(ButtonStyle::Filled))
                                     )
                             )
                             .width(rems(40.))

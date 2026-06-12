@@ -1098,79 +1098,106 @@ impl ProjectPanel {
                 menu.context(self.focus_handle.clone()).map(|menu| {
                     if is_read_only {
                         menu.when(is_dir, |menu| {
-                            menu.action("Search Inside", Box::new(NewSearchInDirectory))
+                            menu.action_localized("Search Inside", Box::new(NewSearchInDirectory))
                         })
                     } else {
-                        menu.action("New File", Box::new(NewFile))
-                            .action("New Folder", Box::new(NewDirectory))
+                        menu.action_localized("New File", Box::new(NewFile))
+                            .action_localized("New Folder", Box::new(NewDirectory))
                             .separator()
-                            .action(
+                            .action_localized(
                                 ui::utils::reveal_in_file_manager_label(false),
                                 Box::new(RevealInFileManager),
                             )
                             .when(is_local, |menu| {
-                                menu.action("Open in Default App", Box::new(OpenWithSystem))
+                                menu.action_localized(
+                                    "Open in Default App",
+                                    Box::new(OpenWithSystem),
+                                )
                             })
-                            .action("Open in Terminal", Box::new(OpenInTerminal))
+                            .action_localized("Open in Terminal", Box::new(OpenInTerminal))
                             .when(is_dir, |menu| {
-                                menu.separator()
-                                    .action("Find in Folder…", Box::new(NewSearchInDirectory))
+                                menu.separator().action_localized(
+                                    "Find in Folder…",
+                                    Box::new(NewSearchInDirectory),
+                                )
                             })
                             .when(is_unfoldable, |menu| {
-                                menu.action("Unfold Directory", Box::new(UnfoldDirectory))
+                                menu.action_localized("Unfold Directory", Box::new(UnfoldDirectory))
                             })
                             .when(is_foldable, |menu| {
-                                menu.action("Fold Directory", Box::new(FoldDirectory))
+                                menu.action_localized("Fold Directory", Box::new(FoldDirectory))
                             })
                             .when(should_show_compare, |menu| {
-                                menu.separator()
-                                    .action("Compare Marked Files", Box::new(CompareMarkedFiles))
+                                menu.separator().action_localized(
+                                    "Compare Marked Files",
+                                    Box::new(CompareMarkedFiles),
+                                )
                             })
                             .separator()
-                            .action("Cut", Box::new(Cut))
-                            .action("Copy", Box::new(Copy))
-                            .action("Duplicate", Box::new(Duplicate))
+                            .action_localized("Cut", Box::new(Cut))
+                            .action_localized("Copy", Box::new(Copy))
+                            .action_localized("Duplicate", Box::new(Duplicate))
                             // TODO: Paste should always be visible, cbut disabled when clipboard is empty
-                            .action_disabled_when(!has_pasteable_content, "Paste", Box::new(Paste))
+                            .action_disabled_when_localized(
+                                !has_pasteable_content,
+                                "Paste",
+                                Box::new(Paste),
+                            )
                             .when(cx.has_flag::<ProjectPanelUndoRedoFeatureFlag>(), |menu| {
-                                menu.action_disabled_when(
+                                menu.action_disabled_when_localized(
                                     !self.undo_manager.can_undo(),
                                     "Undo",
                                     Box::new(Undo),
                                 )
-                                .action_disabled_when(
+                                .action_disabled_when_localized(
                                     !self.undo_manager.can_redo(),
                                     "Redo",
                                     Box::new(Redo),
                                 )
                             })
                             .separator()
-                            .action("Copy Path", Box::new(zed_actions::workspace::CopyPath))
-                            .action(
+                            .action_localized(
+                                "Copy Path",
+                                Box::new(zed_actions::workspace::CopyPath),
+                            )
+                            .action_localized(
                                 "Copy Relative Path",
                                 Box::new(zed_actions::workspace::CopyRelativePath),
                             )
                             .when(has_git_repo, |menu| {
                                 menu.separator()
                                     .when(!is_dir && self.has_git_changes(entry_id), |menu| {
-                                        menu.action(
+                                        menu.action_localized(
                                             "Restore File",
                                             Box::new(git::RestoreFile { skip_prompt: false }),
                                         )
                                     })
-                                    .action("Add to .gitignore", Box::new(git::AddToGitignore))
+                                    .action_localized(
+                                        "Add to .gitignore",
+                                        Box::new(git::AddToGitignore),
+                                    )
                                     .when(has_history, |menu| {
-                                        menu.action("View History", Box::new(git::FileHistory))
+                                        menu.action_localized(
+                                            "View History",
+                                            Box::new(git::FileHistory),
+                                        )
                                     })
                             })
                             .when(!should_hide_rename, |menu| {
-                                menu.separator().action("Rename", Box::new(Rename))
+                                menu.separator()
+                                    .action_localized("Rename", Box::new(Rename))
                             })
                             .when(!is_root, |menu| {
-                                menu.action("Trash", Box::new(Trash { skip_prompt: false }))
+                                menu.action_localized(
+                                    "Trash",
+                                    Box::new(Trash { skip_prompt: false }),
+                                )
                             })
                             .when(!is_root, |menu| {
-                                menu.action("Delete", Box::new(Delete { skip_prompt: false }))
+                                menu.action_localized(
+                                    "Delete",
+                                    Box::new(Delete { skip_prompt: false }),
+                                )
                             })
                             .when(is_root, |menu| {
                                 menu.separator()
@@ -1178,7 +1205,10 @@ impl ProjectPanel {
                                         "Add Folders to Project…",
                                         Box::new(workspace::AddFolderToProject),
                                     )
-                                    .action("Remove from Project", Box::new(RemoveFromProject))
+                                    .action_localized(
+                                        "Remove from Project",
+                                        Box::new(RemoveFromProject),
+                                    )
                             })
                             .when(is_dir && !is_root, |menu| {
                                 menu.separator().action(
@@ -2214,8 +2244,24 @@ impl ProjectPanel {
             let file_name = entry.path.file_name()?.to_string();
 
             let answer = if !action.skip_prompt {
-                let prompt = format!("Discard changes to {}?", file_name);
-                Some(window.prompt(PromptLevel::Info, &prompt, None, &["Restore", "Cancel"], cx))
+                let prompt = match localization::current_language(cx) {
+                    localization::UiLanguage::ChineseSimplified => {
+                        format!("丢弃 {} 的更改？", file_name)
+                    }
+                    localization::UiLanguage::English => {
+                        format!("Discard changes to {}?", file_name)
+                    }
+                };
+                Some(window.prompt(
+                    PromptLevel::Info,
+                    &prompt,
+                    None,
+                    &[
+                        localization::prompt_button(cx, "Restore"),
+                        localization::prompt_button(cx, "Cancel"),
+                    ],
+                    cx,
+                ))
             } else {
                 None
             };
@@ -2236,7 +2282,14 @@ impl ProjectPanel {
                 if let Err(e) = task.await {
                     panel
                         .update(cx, |panel, cx| {
-                            let message = format!("Failed to restore {}: {}", file_name, e);
+                            let message = match localization::current_language(cx) {
+                                localization::UiLanguage::ChineseSimplified => {
+                                    format!("无法还原 {}：{}", file_name, e)
+                                }
+                                localization::UiLanguage::English => {
+                                    format!("Failed to restore {}: {}", file_name, e)
+                                }
+                            };
                             let toast = StatusToast::new(message, cx, |this, _| {
                                 this.icon(
                                     Icon::new(IconName::XCircle)
@@ -2308,7 +2361,14 @@ impl ProjectPanel {
                 if let Err(e) = receiver.await? {
                     if let Some(workspace) = workspace.upgrade() {
                         cx.update(|cx| {
-                            let message = format!("Failed to add to .gitignore: {}", e);
+                            let message = match localization::current_language(cx) {
+                                localization::UiLanguage::ChineseSimplified => {
+                                    format!("无法添加到 .gitignore：{}", e)
+                                }
+                                localization::UiLanguage::English => {
+                                    format!("Failed to add to .gitignore: {}", e)
+                                }
+                            };
                             let toast = StatusToast::new(message, cx, |this, _| {
                                 this.icon(Icon::new(IconName::XCircle).color(Color::Error))
                                     .dismiss_button(true)
@@ -2361,24 +2421,44 @@ impl ProjectPanel {
             }
             let answer = if !skip_prompt {
                 let operation = if trash { "Trash" } else { "Delete" };
-                let message_start = if trash {
-                    "Do you want to trash"
-                } else {
-                    "Are you sure you want to permanently delete"
-                };
+                let ui_language = localization::current_language(cx);
                 let prompt = match file_paths.first() {
-                    Some((_, _, path)) if file_paths.len() == 1 => {
-                        let unsaved_warning = if dirty_buffers > 0 {
-                            "\n\nIt has unsaved changes, which will be lost."
-                        } else {
-                            ""
-                        };
-
-                        format!(
-                            "{message_start} {}?{unsaved_warning}",
-                            MarkdownInlineCode(path)
-                        )
-                    }
+                    Some((_, _, path)) if file_paths.len() == 1 => match ui_language {
+                        localization::UiLanguage::ChineseSimplified => {
+                            let unsaved_warning = if dirty_buffers > 0 {
+                                "\n\n它有未保存的更改，这些更改将会丢失。"
+                            } else {
+                                ""
+                            };
+                            if trash {
+                                format!(
+                                    "要将 {} 移到废纸篓吗？{unsaved_warning}",
+                                    MarkdownInlineCode(path)
+                                )
+                            } else {
+                                format!(
+                                    "确定要永久删除 {} 吗？{unsaved_warning}",
+                                    MarkdownInlineCode(path)
+                                )
+                            }
+                        }
+                        localization::UiLanguage::English => {
+                            let message_start = if trash {
+                                "Do you want to trash"
+                            } else {
+                                "Are you sure you want to permanently delete"
+                            };
+                            let unsaved_warning = if dirty_buffers > 0 {
+                                "\n\nIt has unsaved changes, which will be lost."
+                            } else {
+                                ""
+                            };
+                            format!(
+                                "{message_start} {}?{unsaved_warning}",
+                                MarkdownInlineCode(path)
+                            )
+                        }
+                    },
                     _ => {
                         const CUTOFF_POINT: usize = 10;
                         let names = if file_paths.len() > CUTOFF_POINT {
@@ -2389,11 +2469,23 @@ impl ProjectPanel {
                                 .take(CUTOFF_POINT)
                                 .collect::<Vec<_>>();
                             paths.truncate(CUTOFF_POINT);
-                            if truncated_path_counts == 1 {
-                                paths.push(".. 1 file not shown".into());
-                            } else {
-                                paths.push(format!(".. {} files not shown", truncated_path_counts));
-                            }
+                            match ui_language {
+                                localization::UiLanguage::ChineseSimplified => {
+                                    paths.push(format!(
+                                        ".. 还有 {truncated_path_counts} 个文件未显示"
+                                    ));
+                                }
+                                localization::UiLanguage::English => {
+                                    if truncated_path_counts == 1 {
+                                        paths.push(".. 1 file not shown".into());
+                                    } else {
+                                        paths.push(format!(
+                                            ".. {} files not shown",
+                                            truncated_path_counts
+                                        ));
+                                    }
+                                }
+                            };
                             paths
                         } else {
                             file_paths
@@ -2401,29 +2493,66 @@ impl ProjectPanel {
                                 .map(|(_, _, path)| MarkdownInlineCode(path).to_string())
                                 .collect()
                         };
-                        let unsaved_warning = if dirty_buffers == 0 {
-                            String::new()
-                        } else if dirty_buffers == 1 {
-                            "\n\n1 of these has unsaved changes, which will be lost.".to_string()
-                        } else {
-                            format!(
-                                "\n\n{dirty_buffers} of these have unsaved changes, which will be lost."
-                            )
-                        };
+                        match ui_language {
+                            localization::UiLanguage::ChineseSimplified => {
+                                let unsaved_warning = if dirty_buffers == 0 {
+                                    String::new()
+                                } else {
+                                    format!(
+                                        "\n\n其中 {dirty_buffers} 个有未保存的更改，这些更改将会丢失。"
+                                    )
+                                };
 
-                        format!(
-                            "{message_start} the following {} files?\n{}{unsaved_warning}",
-                            file_paths.len(),
-                            names.join("\n")
-                        )
+                                if trash {
+                                    format!(
+                                        "要将以下 {} 个文件移到废纸篓吗？\n{}{unsaved_warning}",
+                                        file_paths.len(),
+                                        names.join("\n")
+                                    )
+                                } else {
+                                    format!(
+                                        "确定要永久删除以下 {} 个文件吗？\n{}{unsaved_warning}",
+                                        file_paths.len(),
+                                        names.join("\n")
+                                    )
+                                }
+                            }
+                            localization::UiLanguage::English => {
+                                let message_start = if trash {
+                                    "Do you want to trash"
+                                } else {
+                                    "Are you sure you want to permanently delete"
+                                };
+                                let unsaved_warning = if dirty_buffers == 0 {
+                                    String::new()
+                                } else if dirty_buffers == 1 {
+                                    "\n\n1 of these has unsaved changes, which will be lost."
+                                        .to_string()
+                                } else {
+                                    format!(
+                                        "\n\n{dirty_buffers} of these have unsaved changes, which will be lost."
+                                    )
+                                };
+
+                                format!(
+                                    "{message_start} the following {} files?\n{}{unsaved_warning}",
+                                    file_paths.len(),
+                                    names.join("\n")
+                                )
+                            }
+                        }
                     }
                 };
-                let detail = (!trash).then_some("This cannot be undone.");
+                let detail =
+                    (!trash).then(|| localization::t(cx, "This cannot be undone.").to_string());
                 Some(window.prompt(
                     PromptLevel::Info,
                     &prompt,
-                    detail,
-                    &[operation, "Cancel"],
+                    detail.as_deref(),
+                    &[
+                        localization::prompt_button(cx, operation),
+                        localization::prompt_button(cx, "Cancel"),
+                    ],
                     cx,
                 ))
             } else {
@@ -3381,10 +3510,7 @@ impl ProjectPanel {
             };
             if let Some(working_directory) = working_directory {
                 window.dispatch_action(
-                    workspace::OpenTerminal {
-                        working_directory,
-                    }
-                    .boxed_clone(),
+                    workspace::OpenTerminal { working_directory }.boxed_clone(),
                     cx,
                 )
             }
@@ -4176,24 +4302,34 @@ impl ProjectPanel {
             }
         }
 
+        let ui_language = localization::current_language(cx);
         cx.spawn_in(window, async move |this, cx| {
             async move {
                 for (filename, original_path) in &paths_to_replace {
-                    let prompt_message = format!(
-                        concat!(
-                            "A file or folder with name {} ",
-                            "already exists in the destination folder. ",
-                            "Do you want to replace it?"
+                    let prompt_message = match ui_language {
+                        localization::UiLanguage::ChineseSimplified => format!(
+                            "目标文件夹中已存在名为 {} 的文件或文件夹。是否替换？",
+                            filename
                         ),
-                        filename
-                    );
+                        localization::UiLanguage::English => format!(
+                            concat!(
+                                "A file or folder with name {} ",
+                                "already exists in the destination folder. ",
+                                "Do you want to replace it?"
+                            ),
+                            filename
+                        ),
+                    };
                     let answer = cx
                         .update(|window, cx| {
                             window.prompt(
                                 PromptLevel::Info,
                                 &prompt_message,
                                 None,
-                                &["Replace", "Cancel"],
+                                &[
+                                    localization::prompt_button(cx, "Replace"),
+                                    localization::prompt_button(cx, "Cancel"),
+                                ],
                                 cx,
                             )
                         })?

@@ -160,10 +160,7 @@ mod tests {
 
     #[test]
     fn redacts_secret_looking_env_vars() {
-        assert_redacts(
-            "SECRET_API_KEY=abcdef",
-            "SECRET_API_KEY=<redacted>",
-        );
+        assert_redacts("SECRET_API_KEY=abcdef", "SECRET_API_KEY=<redacted>");
         assert_redacts(
             "AWS_SECRET_ACCESS_KEY=anything-at-all",
             "AWS_SECRET_ACCESS_KEY=<redacted>",

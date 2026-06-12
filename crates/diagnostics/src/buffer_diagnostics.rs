@@ -16,6 +16,7 @@ use gpui::{
     Task, TaskExt, WeakEntity, Window, actions, div,
 };
 use language::{Buffer, Capability, DiagnosticEntry, DiagnosticEntryRef, Point};
+use localization::UiLanguage;
 use project::{
     DiagnosticSummary, Event, Project, ProjectItem, ProjectPath,
     project_settings::{DiagnosticSeverity, ProjectSettings},
@@ -916,7 +917,7 @@ impl Render for BufferDiagnosticsEditor {
                         .child(
                             Button::new("open-file", filename)
                                 .style(ButtonStyle::Transparent)
-                                .tooltip(Tooltip::text("Open File"))
+                                .tooltip(Tooltip::localized_text("Open File"))
                                 .on_click(cx.listener(|buffer_diagnostics, _, window, cx| {
                                     if let Some(workspace) = Workspace::for_window(window, cx) {
                                         workspace.update(cx, |workspace, cx| {
@@ -936,8 +937,15 @@ impl Render for BufferDiagnosticsEditor {
                 )
                 .when(self.summary.warning_count > 0, |div| {
                     let label = match self.summary.warning_count {
-                        1 => "Show 1 warning".into(),
-                        warning_count => format!("Show {} warnings", warning_count),
+                        1 => localization::t(cx, "Show 1 warning"),
+                        warning_count => match localization::current_language(cx) {
+                            UiLanguage::ChineseSimplified => {
+                                format!("显示 {warning_count} 条警告").into()
+                            }
+                            UiLanguage::English => {
+                                format!("Show {} warnings", warning_count).into()
+                            }
+                        },
                     };
 
                     div.child(

@@ -48,7 +48,7 @@ pub struct Checkbox {
     placeholder: bool,
     filled: bool,
     visualization: bool,
-    label: Option<SharedString>,
+    label: Option<localization::LocalizableString>,
     label_size: LabelSize,
     label_color: Color,
     tooltip: Option<Box<dyn Fn(&mut Window, &mut App) -> AnyView>>,
@@ -138,7 +138,12 @@ impl Checkbox {
 
     /// Set the label for the checkbox.
     pub fn label(mut self, label: impl Into<SharedString>) -> Self {
-        self.label = Some(label.into());
+        self.label = Some(localization::LocalizableString::User(label.into()));
+        self
+    }
+
+    pub fn localized_label(mut self, label: &'static str) -> Self {
+        self.label = Some(localization::ui(label));
         self
     }
 
@@ -267,7 +272,7 @@ impl RenderOnce for Checkbox {
             .child(checkbox)
             .when_some(self.label, |this, label| {
                 this.child(
-                    Label::new(label)
+                    Label::new(label.resolve(cx))
                         .color(self.label_color)
                         .size(self.label_size),
                 )

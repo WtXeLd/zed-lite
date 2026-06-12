@@ -11,9 +11,9 @@ use collections::HashMap;
 use db::kvp::KeyValueStore;
 use futures::{channel::oneshot, future::join_all};
 use gpui::{
-    Action, Anchor, App, AsyncApp, AsyncWindowContext, Context, Entity, EventEmitter,
-    FocusHandle, Focusable, IntoElement, ParentElement, Pixels, Render, Styled, Task, TaskExt,
-    WeakEntity, Window, actions,
+    Action, Anchor, App, AsyncApp, AsyncWindowContext, Context, Entity, EventEmitter, FocusHandle,
+    Focusable, IntoElement, ParentElement, Pixels, Render, Styled, Task, TaskExt, WeakEntity,
+    Window, actions,
 };
 use itertools::Itertools;
 use project::{Fs, Project};
@@ -127,7 +127,7 @@ impl TerminalPanel {
                         PopoverMenu::new("terminal-tab-bar-popover-menu")
                             .trigger_with_tooltip(
                                 IconButton::new("plus", IconName::Plus).icon_size(IconSize::Small),
-                                Tooltip::text("New…"),
+                                Tooltip::localized_text("New…"),
                             )
                             .anchor(Anchor::TopRight)
                             .with_handle(pane.new_item_context_menu_handle.clone())
@@ -156,7 +156,7 @@ impl TerminalPanel {
                             .trigger_with_tooltip(
                                 IconButton::new("terminal-pane-split", IconName::Split)
                                     .icon_size(IconSize::Small),
-                                Tooltip::text("Split Pane"),
+                                Tooltip::localized_text("Split Pane"),
                             )
                             .anchor(Anchor::TopRight)
                             .with_handle(pane.split_item_context_menu_handle.clone())
@@ -167,10 +167,22 @@ impl TerminalPanel {
                                             split_context.clone(),
                                             |menu, split_context| menu.context(split_context),
                                         )
-                                        .action("Split Right", SplitRight::default().boxed_clone())
-                                        .action("Split Left", SplitLeft::default().boxed_clone())
-                                        .action("Split Up", SplitUp::default().boxed_clone())
-                                        .action("Split Down", SplitDown::default().boxed_clone())
+                                        .action_localized(
+                                            "Split Right",
+                                            SplitRight::default().boxed_clone(),
+                                        )
+                                        .action_localized(
+                                            "Split Left",
+                                            SplitLeft::default().boxed_clone(),
+                                        )
+                                        .action_localized(
+                                            "Split Up",
+                                            SplitUp::default().boxed_clone(),
+                                        )
+                                        .action_localized(
+                                            "Split Down",
+                                            SplitDown::default().boxed_clone(),
+                                        )
                                     })
                                     .into()
                                 }
@@ -1200,7 +1212,7 @@ impl Render for FailedToSpawnTerminal {
             .menu(move |window, cx| {
                 Some(ContextMenu::build(window, cx, |context_menu, _, _| {
                     context_menu
-                        .action("Open Settings", zed_actions::OpenSettings.boxed_clone())
+                        .action_localized("Open Settings", zed_actions::OpenSettings.boxed_clone())
                         .action(
                             "Edit settings.json",
                             zed_actions::OpenSettingsFile.boxed_clone(),
@@ -1226,7 +1238,7 @@ impl Render for FailedToSpawnTerminal {
                     .items_center()
                     .justify_center()
                     .text_center()
-                    .child(Label::new("Failed to spawn terminal"))
+                    .child(Label::localized("Failed to spawn terminal"))
                     .child(
                         Label::new(self.error.to_string())
                             .size(LabelSize::Small)
@@ -1235,7 +1247,7 @@ impl Render for FailedToSpawnTerminal {
                     )
                     .child(SplitButton::new(
                         ButtonLike::new("open-settings-ui")
-                            .child(Label::new("Edit Settings").size(LabelSize::Small))
+                            .child(Label::localized("Edit Settings").size(LabelSize::Small))
                             .on_click(|_, window, cx| {
                                 window.dispatch_action(zed_actions::OpenSettings.boxed_clone(), cx);
                             }),
@@ -1251,7 +1263,7 @@ impl workspace::Item for FailedToSpawnTerminal {
     type Event = ();
 
     fn tab_content_text(&self, _detail: usize, _cx: &App) -> SharedString {
-        SharedString::new_static("Failed to spawn terminal")
+        localization::t(_cx, "Failed to spawn terminal")
     }
 }
 

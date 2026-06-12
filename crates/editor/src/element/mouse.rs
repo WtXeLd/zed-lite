@@ -112,8 +112,8 @@ impl EditorElement {
         }
 
         // Handle diff review indicator when gutter is hovered in diff mode.
-        let show_diff_review = editor.show_diff_review_button()
-            && cx.has_flag::<DiffReviewFeatureFlag>();
+        let show_diff_review =
+            editor.show_diff_review_button() && cx.has_flag::<DiffReviewFeatureFlag>();
 
         let diff_review_indicator = if gutter_hovered && show_diff_review {
             let is_visible = editor
@@ -1121,7 +1121,6 @@ impl EditorElement {
             );
         }
     }
-
 }
 
 fn scale_vertical_mouse_autoscroll_delta(delta: Pixels) -> f32 {

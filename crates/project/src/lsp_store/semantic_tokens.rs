@@ -226,74 +226,72 @@ impl LspStore {
                     code_action_kinds: None,
                 };
                 let request_task = match self.semantic_tokens_result_id(server_id, buffer, cx) {
-                        Some(result_id) => {
-                            let delta_request = SemanticTokensDelta {
-                                previous_result_id: result_id,
-                            };
-                            if !delta_request.check_capabilities(capabilities.clone()) {
-                                let full_request = SemanticTokensFull {
-                                    for_server: Some(server_id),
-                                };
-                                if !full_request.check_capabilities(capabilities) {
-                                    return None;
-                                }
-
-                                self.request_lsp(
-                                    buffer.clone(),
-                                    LanguageServerToQuery::Other(server_id),
-                                    full_request,
-                                    cx,
-                                )
-                            } else {
-                                self.request_lsp(
-                                    buffer.clone(),
-                                    LanguageServerToQuery::Other(server_id),
-                                    delta_request,
-                                    cx,
-                                )
-                            }
-                        }
-                        None => {
-                            let request = SemanticTokensFull {
+                    Some(result_id) => {
+                        let delta_request = SemanticTokensDelta {
+                            previous_result_id: result_id,
+                        };
+                        if !delta_request.check_capabilities(capabilities.clone()) {
+                            let full_request = SemanticTokensFull {
                                 for_server: Some(server_id),
                             };
-                            if !request.check_capabilities(capabilities) {
+                            if !full_request.check_capabilities(capabilities) {
                                 return None;
                             }
+
                             self.request_lsp(
                                 buffer.clone(),
                                 LanguageServerToQuery::Other(server_id),
-                                request,
+                                full_request,
+                                cx,
+                            )
+                        } else {
+                            self.request_lsp(
+                                buffer.clone(),
+                                LanguageServerToQuery::Other(server_id),
+                                delta_request,
                                 cx,
                             )
                         }
-                    };
-                    Some(async move { (server_id, request_task.await) })
-                })
-                .collect::<Vec<_>>();
-            if token_tasks.is_empty() {
-                return Task::ready(None);
-            }
+                    }
+                    None => {
+                        let request = SemanticTokensFull {
+                            for_server: Some(server_id),
+                        };
+                        if !request.check_capabilities(capabilities) {
+                            return None;
+                        }
+                        self.request_lsp(
+                            buffer.clone(),
+                            LanguageServerToQuery::Other(server_id),
+                            request,
+                            cx,
+                        )
+                    }
+                };
+                Some(async move { (server_id, request_task.await) })
+            })
+            .collect::<Vec<_>>();
+        if token_tasks.is_empty() {
+            return Task::ready(None);
+        }
 
-            cx.background_spawn(async move {
-                Some(
-                    join_all(token_tasks)
-                        .await
-                        .into_iter()
-                        .flat_map(|(server_id, response)| {
-                            match response {
-                                Ok(tokens) => Some((server_id, tokens)),
-                                Err(e) => {
+        cx.background_spawn(async move {
+            Some(
+                join_all(token_tasks)
+                    .await
+                    .into_iter()
+                    .flat_map(|(server_id, response)| match response {
+                        Ok(tokens) => Some((server_id, tokens)),
+                        Err(e) => {
                             log::error!(
                                 "Failed to query semantic tokens for server {server_id:?}: {e:#}"
                             );
-                                    None
-                                }
-                            }
-                        })
-                        .collect()
-                )
-            })
+                            None
+                        }
+                    })
+                    .collect(),
+            )
+        })
     }
 
     pub(crate) async fn handle_refresh_semantic_tokens(

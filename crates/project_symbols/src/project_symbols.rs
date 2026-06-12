@@ -111,6 +111,10 @@ impl PickerDelegate for ProjectSymbolsDelegate {
         "Search project symbols...".into()
     }
 
+    fn localized_placeholder_text(&self) -> Option<&'static str> {
+        Some("Search project symbols...")
+    }
+
     fn confirm(&mut self, secondary: bool, window: &mut Window, cx: &mut Context<Picker<Self>>) {
         if let Some(symbol) = self
             .matches

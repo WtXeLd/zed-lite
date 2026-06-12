@@ -197,7 +197,6 @@ pub struct LibManifestEntry {
     pub version: Option<Version>,
 }
 
-
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
 pub enum ExtensionLibraryKind {
     Rust,

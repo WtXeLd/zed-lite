@@ -134,7 +134,7 @@ impl Render for BufferSearchBar {
                             IconButton::new("diff-unified", IconName::DiffUnified)
                                 .icon_size(IconSize::Small)
                                 .toggle_state(diff_view_style == DiffViewStyle::Unified)
-                                .tooltip(Tooltip::text("Unified"))
+                                .tooltip(Tooltip::localized_text("Unified"))
                                 .on_click({
                                     let splittable_editor = splittable_editor.downgrade();
                                     move |_, window, cx| {
@@ -166,10 +166,18 @@ impl Render for BufferSearchBar {
                                 .icon_size(IconSize::Small)
                                 .tooltip(Tooltip::element(move |_, cx| {
                                     let message = if is_split_set && !is_split_active {
-                                        format!("Split when wider than {} columns", min_columns)
-                                            .into()
+                                        match localization::current_language(cx) {
+                                            localization::UiLanguage::ChineseSimplified => {
+                                                format!("宽于 {min_columns} 列时拆分").into()
+                                            }
+                                            localization::UiLanguage::English => format!(
+                                                "Split when wider than {} columns",
+                                                min_columns
+                                            )
+                                            .into(),
+                                        }
                                     } else {
-                                        SharedString::from("Split")
+                                        localization::t(cx, "Split")
                                     };
 
                                     v_flex()
@@ -299,12 +307,12 @@ impl Render for BufferSearchBar {
 
         self.query_editor.update(cx, |query_editor, cx| {
             if query_editor.placeholder_text(cx).is_none() {
-                query_editor.set_placeholder_text("Search…", window, cx);
+                query_editor.set_localized_placeholder_text("Search…", window, cx);
             }
         });
 
         self.replacement_editor.update(cx, |editor, cx| {
-            editor.set_placeholder_text("Replace with…", window, cx);
+            editor.set_localized_placeholder_text("Replace with…", window, cx);
         });
 
         let mut color_override = None;

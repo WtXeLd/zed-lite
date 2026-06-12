@@ -119,6 +119,10 @@ impl PickerDelegate for LineEndingSelectorDelegate {
         "Select a line ending…".into()
     }
 
+    fn localized_placeholder_text(&self) -> Option<&'static str> {
+        Some("Select a line ending…")
+    }
+
     fn match_count(&self) -> usize {
         self.matches.len()
     }

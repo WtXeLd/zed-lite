@@ -1,8 +1,8 @@
 use crate::{
     Copy, CopyAndTrim, CopyPermalinkToLine, Cut, DisplayPoint, DisplaySnapshot, Editor,
     FindAllReferences, GoToDeclaration, GoToDefinition, GoToImplementation, GoToTypeDefinition,
-    Paste, Rename, RevealInFileManager, SelectMode, SelectionEffects, SelectionExt,
-    ToDisplayPoint, ToggleCodeActions,
+    Paste, Rename, RevealInFileManager, SelectMode, SelectionEffects, SelectionExt, ToDisplayPoint,
+    ToggleCodeActions,
     actions::{Format, FormatSelections},
     selections_collection::SelectionsCollection,
 };
@@ -231,21 +231,21 @@ pub fn deploy_context_menu(
         ui::ContextMenu::build(window, cx, |menu, _window, _cx| {
             let builder = menu
                 .on_blur_subscription(Subscription::new(|| {}))
-                .action("Go to Definition", Box::new(GoToDefinition))
-                .action("Go to Declaration", Box::new(GoToDeclaration))
-                .action("Go to Type Definition", Box::new(GoToTypeDefinition))
-                .action("Go to Implementation", Box::new(GoToImplementation))
-                .action(
+                .action_localized("Go to Definition", Box::new(GoToDefinition))
+                .action_localized("Go to Declaration", Box::new(GoToDeclaration))
+                .action_localized("Go to Type Definition", Box::new(GoToTypeDefinition))
+                .action_localized("Go to Implementation", Box::new(GoToImplementation))
+                .action_localized(
                     "Find All References",
                     Box::new(FindAllReferences::default()),
                 )
                 .separator()
-                .action("Rename Symbol", Box::new(Rename))
-                .action("Format Buffer", Box::new(Format))
+                .action_localized("Rename Symbol", Box::new(Rename))
+                .action_localized("Format Buffer", Box::new(Format))
                 .when(format_selections, |cx| {
-                    cx.action("Format Selections", Box::new(FormatSelections))
+                    cx.action_localized("Format Selections", Box::new(FormatSelections))
                 })
-                .action(
+                .action_localized(
                     "Show Code Actions",
                     Box::new(ToggleCodeActions {
                         deployed_from: None,
@@ -253,33 +253,33 @@ pub fn deploy_context_menu(
                     }),
                 )
                 .separator()
-                .action("Cut", Box::new(Cut))
-                .action("Copy", Box::new(Copy))
-                .action("Copy and Trim", Box::new(CopyAndTrim))
-                .action("Paste", Box::new(Paste))
+                .action_localized("Cut", Box::new(Cut))
+                .action_localized("Copy", Box::new(Copy))
+                .action_localized("Copy and Trim", Box::new(CopyAndTrim))
+                .action_localized("Paste", Box::new(Paste))
                 .separator()
-                .action_disabled_when(
+                .action_disabled_when_localized(
                     !has_reveal_target,
                     ui::utils::reveal_in_file_manager_label(false),
                     Box::new(RevealInFileManager),
                 )
                 .when(is_markdown, |builder| {
-                    builder.action("Open Markdown Preview", Box::new(OpenMarkdownPreview))
+                    builder.action_localized("Open Markdown Preview", Box::new(OpenMarkdownPreview))
                 })
                 .when(is_svg, |builder| {
-                    builder.action("Open SVG Preview", Box::new(OpenSvgPreview))
+                    builder.action_localized("Open SVG Preview", Box::new(OpenSvgPreview))
                 })
-                .action_disabled_when(
+                .action_disabled_when_localized(
                     !has_reveal_target,
                     "Open in Terminal",
                     Box::new(OpenInTerminal),
                 )
-                .action_disabled_when(
+                .action_disabled_when_localized(
                     !has_git_repo,
                     "Copy Permalink",
                     Box::new(CopyPermalinkToLine),
                 )
-                .action_disabled_when(
+                .action_disabled_when_localized(
                     !has_git_repo,
                     "View File History",
                     Box::new(git::FileHistory),

@@ -1046,7 +1046,7 @@ impl Render for MarkdownPreviewView {
                                 ContextMenu::build(window, cx, move |menu, _, _cx| {
                                     menu.when_some(focus, |menu, focus| menu.context(focus))
                                         .when_some(context_menu_link, |menu, url| {
-                                            menu.entry("Copy Link", None, move |_, cx| {
+                                            menu.entry_localized("Copy Link", None, move |_, cx| {
                                                 cx.write_to_clipboard(ClipboardItem::new_string(
                                                     url.to_string(),
                                                 ));

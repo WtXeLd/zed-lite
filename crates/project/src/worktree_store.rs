@@ -144,9 +144,7 @@ impl WorktreePaths {
 }
 
 enum WorktreeStoreState {
-    Local {
-        fs: Arc<dyn Fs>,
-    },
+    Local { fs: Arc<dyn Fs> },
 }
 
 #[derive(Clone)]
@@ -225,9 +223,7 @@ impl WorktreeStore {
 
     pub fn next_worktree_id(&self) -> impl Future<Output = Result<WorktreeId>> + use<> {
         let next_worktree_id = self.next_worktree_id.next();
-        async move {
-            Ok(WorktreeId::from_proto(next_worktree_id))
-        }
+        async move { Ok(WorktreeId::from_proto(next_worktree_id)) }
     }
 
     pub fn disable_scanner(&mut self) {
@@ -456,111 +452,99 @@ impl WorktreeStore {
         };
 
         let WorktreeStoreState::Local { fs } = &self.state;
-                let abs_old_path = old_worktree.read(cx).absolutize(&old_entry.path);
-                let new_worktree_ref = new_worktree.read(cx);
-                let is_root_entry = new_worktree_ref
-                    .root_entry()
-                    .is_some_and(|e| e.id == entry_id);
-                let abs_new_path = if is_root_entry {
-                    let abs_path = new_worktree_ref.abs_path();
-                    let Some(root_parent_path) = abs_path.parent() else {
-                        return Task::ready(Err(anyhow!("no parent for path {:?}", abs_path)));
-                    };
-                    root_parent_path.join(new_project_path.path.as_std_path())
-                } else {
-                    new_worktree_ref.absolutize(&new_project_path.path)
-                };
+        let abs_old_path = old_worktree.read(cx).absolutize(&old_entry.path);
+        let new_worktree_ref = new_worktree.read(cx);
+        let is_root_entry = new_worktree_ref
+            .root_entry()
+            .is_some_and(|e| e.id == entry_id);
+        let abs_new_path = if is_root_entry {
+            let abs_path = new_worktree_ref.abs_path();
+            let Some(root_parent_path) = abs_path.parent() else {
+                return Task::ready(Err(anyhow!("no parent for path {:?}", abs_path)));
+            };
+            root_parent_path.join(new_project_path.path.as_std_path())
+        } else {
+            new_worktree_ref.absolutize(&new_project_path.path)
+        };
 
-                let fs = fs.clone();
-                let case_sensitive = new_worktree
-                    .read(cx)
-                    .as_local()
-                    .unwrap()
-                    .fs_is_case_sensitive();
+        let fs = fs.clone();
+        let case_sensitive = new_worktree
+            .read(cx)
+            .as_local()
+            .unwrap()
+            .fs_is_case_sensitive();
 
-                let do_rename =
-                    async move |fs: &dyn Fs, old_path: &Path, new_path: &Path, overwrite| {
-                        fs.rename(
-                            &old_path,
-                            &new_path,
-                            fs::RenameOptions {
-                                overwrite,
-                                ..fs::RenameOptions::default()
-                            },
-                        )
-                        .await
-                        .with_context(|| format!("renaming {old_path:?} into {new_path:?}"))
-                    };
+        let do_rename = async move |fs: &dyn Fs, old_path: &Path, new_path: &Path, overwrite| {
+            fs.rename(
+                &old_path,
+                &new_path,
+                fs::RenameOptions {
+                    overwrite,
+                    ..fs::RenameOptions::default()
+                },
+            )
+            .await
+            .with_context(|| format!("renaming {old_path:?} into {new_path:?}"))
+        };
 
-                let rename = cx.background_spawn({
-                    let abs_new_path = abs_new_path.clone();
-                    async move {
-                        // If we're on a case-insensitive FS and we're doing a case-only rename (i.e. `foobar` to `FOOBAR`)
-                        // we want to overwrite, because otherwise we run into a file-already-exists error.
-                        let overwrite = !case_sensitive
-                            && abs_old_path != abs_new_path
-                            && abs_old_path.to_str().map(|p| p.to_lowercase())
-                                == abs_new_path.to_str().map(|p| p.to_lowercase());
+        let rename = cx.background_spawn({
+            let abs_new_path = abs_new_path.clone();
+            async move {
+                // If we're on a case-insensitive FS and we're doing a case-only rename (i.e. `foobar` to `FOOBAR`)
+                // we want to overwrite, because otherwise we run into a file-already-exists error.
+                let overwrite = !case_sensitive
+                    && abs_old_path != abs_new_path
+                    && abs_old_path.to_str().map(|p| p.to_lowercase())
+                        == abs_new_path.to_str().map(|p| p.to_lowercase());
 
-                        // The directory we're renaming into might not exist yet
-                        if let Err(e) =
-                            do_rename(fs.as_ref(), &abs_old_path, &abs_new_path, overwrite).await
-                        {
-                            if let Some(err) = e.downcast_ref::<std::io::Error>()
-                                && err.kind() == std::io::ErrorKind::NotFound
-                            {
-                                if let Some(parent) = abs_new_path.parent() {
-                                    fs.create_dir(parent).await.with_context(|| {
-                                        format!("creating parent directory {parent:?}")
-                                    })?;
-                                    return do_rename(
-                                        fs.as_ref(),
-                                        &abs_old_path,
-                                        &abs_new_path,
-                                        overwrite,
-                                    )
-                                    .await;
-                                }
-                            }
-                            return Err(e);
+                // The directory we're renaming into might not exist yet
+                if let Err(e) =
+                    do_rename(fs.as_ref(), &abs_old_path, &abs_new_path, overwrite).await
+                {
+                    if let Some(err) = e.downcast_ref::<std::io::Error>()
+                        && err.kind() == std::io::ErrorKind::NotFound
+                    {
+                        if let Some(parent) = abs_new_path.parent() {
+                            fs.create_dir(parent)
+                                .await
+                                .with_context(|| format!("creating parent directory {parent:?}"))?;
+                            return do_rename(fs.as_ref(), &abs_old_path, &abs_new_path, overwrite)
+                                .await;
                         }
-                        Ok(())
                     }
-                });
+                    return Err(e);
+                }
+                Ok(())
+            }
+        });
 
-                cx.spawn(async move |_, cx| {
-                    rename.await?;
-                    Ok(new_worktree
-                        .update(cx, |this, cx| {
-                            let local = this.as_local_mut().unwrap();
-                            if is_root_entry {
-                                // We eagerly update `abs_path` and refresh this worktree.
-                                // Otherwise, the FS watcher would do it on the `RootUpdated` event,
-                                // but with a noticeable delay, so we handle it proactively.
-                                local.update_abs_path_and_refresh(
-                                    SanitizedPath::new_arc(&abs_new_path),
-                                    cx,
-                                );
-                                Task::ready(Ok(this.root_entry().cloned()))
-                            } else {
-                                // First refresh the parent directory (in case it was newly created)
-                                if let Some(parent) = new_project_path.path.parent() {
-                                    let _ = local.refresh_entries_for_paths(vec![parent.into()]);
-                                }
-                                // Then refresh the new path
-                                local.refresh_entry(
-                                    new_project_path.path.clone(),
-                                    Some(old_entry.path),
-                                    cx,
-                                )
-                            }
-                        })
-                        .await?
-                        .map(CreatedEntry::Included)
-                        .unwrap_or_else(|| CreatedEntry::Excluded {
-                            abs_path: abs_new_path,
-                        }))
+        cx.spawn(async move |_, cx| {
+            rename.await?;
+            Ok(new_worktree
+                .update(cx, |this, cx| {
+                    let local = this.as_local_mut().unwrap();
+                    if is_root_entry {
+                        // We eagerly update `abs_path` and refresh this worktree.
+                        // Otherwise, the FS watcher would do it on the `RootUpdated` event,
+                        // but with a noticeable delay, so we handle it proactively.
+                        local
+                            .update_abs_path_and_refresh(SanitizedPath::new_arc(&abs_new_path), cx);
+                        Task::ready(Ok(this.root_entry().cloned()))
+                    } else {
+                        // First refresh the parent directory (in case it was newly created)
+                        if let Some(parent) = new_project_path.path.parent() {
+                            let _ = local.refresh_entries_for_paths(vec![parent.into()]);
+                        }
+                        // Then refresh the new path
+                        local.refresh_entry(new_project_path.path.clone(), Some(old_entry.path), cx)
+                    }
                 })
+                .await?
+                .map(CreatedEntry::Included)
+                .unwrap_or_else(|| CreatedEntry::Excluded {
+                    abs_path: abs_new_path,
+                }))
+        })
     }
     pub fn create_worktree(
         &mut self,
@@ -601,7 +585,11 @@ impl WorktreeStore {
                         .flatten()
                     {
                         trusted_worktrees.update(cx, |trusted_worktrees, cx| {
-                            trusted_worktrees.can_trust(&worktree_store, worktree.read(cx).id(), cx);
+                            trusted_worktrees.can_trust(
+                                &worktree_store,
+                                worktree.read(cx).id(),
+                                cx,
+                            );
                         });
                     }
 

@@ -428,7 +428,7 @@ impl Editor {
         // Create the prompt editor for the review input
         let prompt_editor = cx.new(|cx| {
             let mut editor = Editor::single_line(window, cx);
-            editor.set_placeholder_text("Add a review comment...", window, cx);
+            editor.set_localized_placeholder_text("Add a review comment...", window, cx);
             editor
         });
 
@@ -815,7 +815,9 @@ impl Editor {
                     .border_color(icon_color.opacity(0.5))
             })
             .child(Icon::new(IconName::Plus).size(IconSize::Small))
-            .tooltip(Tooltip::text("Add Review (drag to select multiple lines)"))
+            .tooltip(Tooltip::localized_text(
+                "Add Review (drag to select multiple lines)",
+            ))
             .on_mouse_down(
                 gpui::MouseButton::Left,
                 cx.listener(move |editor, _event: &gpui::MouseDownEvent, window, cx| {
@@ -1295,14 +1297,21 @@ impl Editor {
                 .ok();
             }
             Err(err) => {
-                let message = format!("Failed to copy permalink: {err}");
-
+                let err_message = err.to_string();
                 anyhow::Result::<()>::Err(err).log_err();
 
                 if let Some(workspace) = workspace {
                     workspace
                         .update_in(cx, |workspace, _, cx| {
                             struct CopyPermalinkToLine;
+                            let message = match localization::current_language(cx) {
+                                localization::UiLanguage::ChineseSimplified => {
+                                    format!("无法复制永久链接：{err_message}")
+                                }
+                                localization::UiLanguage::English => {
+                                    format!("Failed to copy permalink: {err_message}")
+                                }
+                            };
 
                             workspace.show_toast(
                                 Toast::new(
@@ -1336,13 +1345,20 @@ impl Editor {
                 .ok();
             }
             Err(err) => {
-                let message = format!("Failed to open permalink: {err}");
-
+                let err_message = err.to_string();
                 anyhow::Result::<()>::Err(err).log_err();
 
                 if let Some(workspace) = workspace {
                     workspace.update(cx, |workspace, cx| {
                         struct OpenPermalinkToLine;
+                        let message = match localization::current_language(cx) {
+                            localization::UiLanguage::ChineseSimplified => {
+                                format!("无法打开永久链接：{err_message}")
+                            }
+                            localization::UiLanguage::English => {
+                                format!("Failed to open permalink: {err_message}")
+                            }
+                        };
 
                         workspace.show_toast(
                             Toast::new(NotificationId::unique::<OpenPermalinkToLine>(), message),
@@ -2228,7 +2244,7 @@ impl Editor {
                                 IconButton::new("diff-review-close", IconName::Close)
                                     .icon_color(ui::Color::Muted)
                                     .icon_size(action_icon_size)
-                                    .tooltip(Tooltip::text("Close"))
+                                    .tooltip(Tooltip::localized_text("Close"))
                                     .on_click(|_, window, cx| {
                                         window
                                             .dispatch_action(Box::new(crate::actions::Cancel), cx);
@@ -2238,7 +2254,7 @@ impl Editor {
                                 IconButton::new("diff-review-add", IconName::Return)
                                     .icon_color(ui::Color::Muted)
                                     .icon_size(action_icon_size)
-                                    .tooltip(Tooltip::text("Add comment"))
+                                    .tooltip(Tooltip::localized_text("Add comment"))
                                     .on_click(|_, window, cx| {
                                         window.dispatch_action(
                                             Box::new(crate::actions::SubmitDiffReviewComment),
@@ -2398,7 +2414,7 @@ impl Editor {
                         )
                         .icon_color(ui::Color::Muted)
                         .icon_size(action_icon_size)
-                        .tooltip(Tooltip::text("Cancel"))
+                        .tooltip(Tooltip::localized_text("Cancel"))
                         .on_click(move |_, window, cx| {
                             window.dispatch_action(
                                 Box::new(crate::actions::CancelEditReviewComment {
@@ -2415,7 +2431,7 @@ impl Editor {
                         )
                         .icon_color(ui::Color::Muted)
                         .icon_size(action_icon_size)
-                        .tooltip(Tooltip::text("Confirm"))
+                        .tooltip(Tooltip::localized_text("Confirm"))
                         .on_click(move |_, window, cx| {
                             window.dispatch_action(
                                 Box::new(crate::actions::ConfirmEditReviewComment {
@@ -2643,7 +2659,7 @@ pub(super) fn render_diff_hunk_controls(
         .shadow_md()
         .when(show_stage_restore, |el| {
             el.child(if status.has_secondary_hunk() {
-                Button::new(("stage", row as u64), "Stage")
+                Button::localized(("stage", row as u64), "Stage")
                     .alpha(if status.is_pending() { 0.66 } else { 1.0 })
                     .tooltip({
                         let focus_handle = editor.focus_handle(cx);
@@ -2669,7 +2685,7 @@ pub(super) fn render_diff_hunk_controls(
                         }
                     })
             } else {
-                Button::new(("unstage", row as u64), "Unstage")
+                Button::localized(("unstage", row as u64), "Unstage")
                     .alpha(if status.is_pending() { 0.66 } else { 1.0 })
                     .tooltip({
                         let focus_handle = editor.focus_handle(cx);
@@ -2698,7 +2714,7 @@ pub(super) fn render_diff_hunk_controls(
         })
         .when(show_stage_restore, |el| {
             el.child(
-                Button::new(("restore", row as u64), "Restore")
+                Button::localized(("restore", row as u64), "Restore")
                     .tooltip({
                         let focus_handle = editor.focus_handle(cx);
                         move |_window, cx| {
@@ -2733,9 +2749,11 @@ pub(super) fn render_diff_hunk_controls(
                         // .disabled(!has_multiple_hunks)
                         .tooltip({
                             let focus_handle = editor.focus_handle(cx);
-                            move |_window, cx| {
-                                Tooltip::for_action_in("Next Hunk", &GoToHunk, &focus_handle, cx)
-                            }
+                            Tooltip::for_localized_action_title_in(
+                                "Next Hunk",
+                                &GoToHunk,
+                                &focus_handle,
+                            )
                         })
                         .on_click({
                             let editor = editor.clone();

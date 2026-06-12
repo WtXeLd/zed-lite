@@ -247,7 +247,11 @@ impl Render for ActiveToolchain {
                         });
                     }
                 }))
-                .tooltip(Tooltip::text(format!("Select {}", &self.term))),
+                .tooltip(Tooltip::text(format!(
+                    "{} {}",
+                    localization::t(cx, "Select"),
+                    localization::t_shared_if_known(cx, &self.term)
+                ))),
         )
     }
 }

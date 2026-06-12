@@ -1057,8 +1057,13 @@ impl Item for ProjectDiff {
 
     fn tab_content_text(&self, _detail: usize, cx: &App) -> SharedString {
         match self.branch_diff.read(cx).diff_base() {
-            DiffBase::Head => "Uncommitted Changes".into(),
-            DiffBase::Merge { base_ref } => format!("Changes since {}", base_ref).into(),
+            DiffBase::Head => localization::t(cx, "Uncommitted Changes"),
+            DiffBase::Merge { base_ref } => match localization::current_language(cx) {
+                localization::UiLanguage::ChineseSimplified => {
+                    format!("自 {} 以来的变更", base_ref).into()
+                }
+                localization::UiLanguage::English => format!("Changes since {}", base_ref).into(),
+            },
         }
     }
 
@@ -1249,19 +1254,19 @@ impl Render for ProjectDiff {
                         .child(
                             h_flex()
                                 .justify_around()
-                                .child(Label::new("No uncommitted changes")),
+                                .child(Label::localized("No uncommitted changes")),
                         )
                         .map(|el| match remote_button {
                             Some(button) => el.child(h_flex().justify_around().child(button)),
                             None => el.child(
                                 h_flex()
                                     .justify_around()
-                                    .child(Label::new("Remote up to date")),
+                                    .child(Label::localized("Remote up to date")),
                             ),
                         })
                         .child(
                             h_flex().justify_around().mt_1().child(
-                                Button::new("project-diff-close-button", "Close")
+                                Button::localized("project-diff-close-button", "Close")
                                     // .style(ButtonStyle::Transparent)
                                     .key_binding(KeyBinding::for_action_in(
                                         &CloseActiveItem::default(),
@@ -1529,8 +1534,8 @@ impl Render for ProjectDiffToolbar {
                 h_group_sm()
                     .when(button_states.selection, |el| {
                         el.child(
-                            Button::new("stage", "Toggle Staged")
-                                .tooltip(Tooltip::for_action_title_in(
+                            Button::localized("stage", "Toggle Staged")
+                                .tooltip(Tooltip::for_localized_action_title_in(
                                     "Toggle Staged",
                                     &ToggleStaged,
                                     &focus_handle,
@@ -1543,8 +1548,8 @@ impl Render for ProjectDiffToolbar {
                     })
                     .when(!button_states.selection, |el| {
                         el.child(
-                            Button::new("stage", "Stage")
-                                .tooltip(Tooltip::for_action_title_in(
+                            Button::localized("stage", "Stage")
+                                .tooltip(Tooltip::for_localized_action_title_in(
                                     "Stage and go to next hunk",
                                     &StageAndNext,
                                     &focus_handle,
@@ -1559,8 +1564,8 @@ impl Render for ProjectDiffToolbar {
                                 })),
                         )
                         .child(
-                            Button::new("unstage", "Unstage")
-                                .tooltip(Tooltip::for_action_title_in(
+                            Button::localized("unstage", "Unstage")
+                                .tooltip(Tooltip::for_localized_action_title_in(
                                     "Unstage and go to next hunk",
                                     &UnstageAndNext,
                                     &focus_handle,
@@ -1583,7 +1588,7 @@ impl Render for ProjectDiffToolbar {
                     .child(
                         IconButton::new("up", IconName::ArrowUp)
                             .shape(ui::IconButtonShape::Square)
-                            .tooltip(Tooltip::for_action_title_in(
+                            .tooltip(Tooltip::for_localized_action_title_in(
                                 "Go to previous hunk",
                                 &GoToPreviousHunk,
                                 &focus_handle,
@@ -1596,7 +1601,7 @@ impl Render for ProjectDiffToolbar {
                     .child(
                         IconButton::new("down", IconName::ArrowDown)
                             .shape(ui::IconButtonShape::Square)
-                            .tooltip(Tooltip::for_action_title_in(
+                            .tooltip(Tooltip::for_localized_action_title_in(
                                 "Go to next hunk",
                                 &GoToHunk,
                                 &focus_handle,
@@ -1614,8 +1619,8 @@ impl Render for ProjectDiffToolbar {
                         button_states.unstage_all && !button_states.stage_all,
                         |el| {
                             el.child(
-                                Button::new("unstage-all", "Unstage All")
-                                    .tooltip(Tooltip::for_action_title_in(
+                                Button::localized("unstage-all", "Unstage All")
+                                    .tooltip(Tooltip::for_localized_action_title_in(
                                         "Unstage all changes",
                                         &UnstageAll,
                                         &focus_handle,
@@ -1633,9 +1638,9 @@ impl Render for ProjectDiffToolbar {
                                 // todo make it so that changing to say "Unstaged"
                                 // doesn't change the position.
                                 div().child(
-                                    Button::new("stage-all", "Stage All")
+                                    Button::localized("stage-all", "Stage All")
                                         .disabled(!button_states.stage_all)
-                                        .tooltip(Tooltip::for_action_title_in(
+                                        .tooltip(Tooltip::for_localized_action_title_in(
                                             "Stage all changes",
                                             &StageAll,
                                             &focus_handle,
@@ -1648,8 +1653,8 @@ impl Render for ProjectDiffToolbar {
                         },
                     )
                     .child(
-                        Button::new("commit", "Commit")
-                            .tooltip(Tooltip::for_action_title_in(
+                        Button::localized("commit", "Commit")
+                            .tooltip(Tooltip::for_localized_action_title_in(
                                 "Commit",
                                 &Commit,
                                 &focus_handle,
@@ -1676,7 +1681,6 @@ impl BranchDiffToolbar {
     fn project_diff(&self, _: &App) -> Option<Entity<ProjectDiff>> {
         self.project_diff.as_ref()?.upgrade()
     }
-
 }
 
 impl EventEmitter<ToolbarItemEvent> for BranchDiffToolbar {}
@@ -1719,7 +1723,10 @@ impl Render for BranchDiffToolbar {
             return div();
         };
         let selected_base_ref = base_ref.clone();
-        let base_ref_label = format!("Base: {base_ref}");
+        let base_ref_label = match localization::current_language(cx) {
+            localization::UiLanguage::ChineseSimplified => format!("基准：{base_ref}"),
+            localization::UiLanguage::English => format!("Base: {base_ref}"),
+        };
         let repository = project_diff.read(cx).branch_diff.read(cx).repo().cloned();
         let workspace = project_diff.read(cx).workspace.clone();
         let project_diff_for_picker = project_diff.downgrade();
@@ -1771,7 +1778,7 @@ impl Render for BranchDiffToolbar {
                                     .size(IconSize::XSmall)
                                     .color(Color::Muted),
                             ),
-                        Tooltip::text("Select base branch"),
+                        Tooltip::localized_text("Select base branch"),
                     ),
             )
             .when(!is_multibuffer_empty, |this| {

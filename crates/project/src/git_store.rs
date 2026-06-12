@@ -49,10 +49,7 @@ use gpui::{
     App, AppContext, AsyncApp, BackgroundExecutor, Context, Entity, EventEmitter, SharedString,
     Subscription, Task, TaskExt, WeakEntity,
 };
-use language::{
-    Buffer, BufferEvent, Language, LanguageRegistry,
-    proto::deserialize_version,
-};
+use language::{Buffer, BufferEvent, Language, LanguageRegistry, proto::deserialize_version};
 use parking_lot::Mutex;
 use paths::{config_dir, home_dir};
 use pending_op::{PendingOp, PendingOpId, PendingOps, PendingOpsSummary};
@@ -6297,7 +6294,6 @@ impl Repository {
                             .edit(changed_path_statuses, ());
                         this.snapshot.scan_id += 1;
                     }
-
                 })
             },
         );

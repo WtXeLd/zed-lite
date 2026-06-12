@@ -16,7 +16,7 @@ impl SettingsSectionHeader {
 
 impl RenderOnce for SettingsSectionHeader {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let label = Label::new(self.label)
+        let label = Label::new(localization::t_shared(cx, self.label))
             .size(LabelSize::Small)
             .color(Color::Muted)
             .buffer_font(cx);

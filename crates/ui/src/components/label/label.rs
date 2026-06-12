@@ -35,6 +35,7 @@ use gpui::{HighlightStyle, StyleRefinement, StyledText};
 pub struct Label {
     base: LabelLike,
     label: SharedString,
+    localize_label: bool,
     render_code_spans: bool,
 }
 
@@ -52,6 +53,16 @@ impl Label {
         Self {
             base: LabelLike::new(),
             label: label.into(),
+            localize_label: false,
+            render_code_spans: false,
+        }
+    }
+
+    pub fn localized(label: &'static str) -> Self {
+        Self {
+            base: LabelLike::new(),
+            label: label.into(),
+            localize_label: true,
             render_code_spans: false,
         }
     }
@@ -245,8 +256,13 @@ impl LabelCommon for Label {
 
 impl RenderOnce for Label {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let label = if self.localize_label {
+            localization::t_shared(cx, self.label)
+        } else {
+            self.label
+        };
         if self.render_code_spans {
-            if let Some((stripped, code_ranges)) = parse_backtick_spans(&self.label) {
+            if let Some((stripped, code_ranges)) = parse_backtick_spans(&label) {
                 let buffer_font_family = theme::theme_settings(cx).buffer_font(cx).family.clone();
                 let background_color = cx.theme().colors().element_background;
 
@@ -271,7 +287,7 @@ impl RenderOnce for Label {
                 );
             }
         }
-        self.base.child(self.label)
+        self.base.child(label)
     }
 }
 

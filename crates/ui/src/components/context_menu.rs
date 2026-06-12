@@ -45,10 +45,14 @@ enum HoverTarget {
 
 pub enum ContextMenuItem {
     Separator,
-    Header(SharedString),
+    Header(localization::LocalizableString),
     /// title, link_label, link_url
-    HeaderWithLink(SharedString, SharedString, SharedString), // This could be folded into header
-    Label(SharedString),
+    HeaderWithLink(
+        localization::LocalizableString,
+        localization::LocalizableString,
+        SharedString,
+    ), // This could be folded into header
+    Label(localization::LocalizableString),
     Entry(ContextMenuEntry),
     CustomEntry {
         entry_render: Box<dyn Fn(&mut Window, &mut App) -> AnyElement>,
@@ -57,7 +61,7 @@ pub enum ContextMenuItem {
         documentation_aside: Option<DocumentationAside>,
     },
     Submenu {
-        label: SharedString,
+        label: localization::LocalizableString,
         icon: Option<IconName>,
         icon_color: Option<Color>,
         builder: Rc<dyn Fn(ContextMenu, &mut Window, &mut Context<ContextMenu>) -> ContextMenu>,
@@ -81,7 +85,7 @@ impl ContextMenuItem {
 
 pub struct ContextMenuEntry {
     toggle: Option<(IconPosition, bool)>,
-    label: SharedString,
+    label: localization::LocalizableString,
     icon: Option<IconName>,
     custom_icon_path: Option<SharedString>,
     custom_icon_svg: Option<SharedString>,
@@ -103,7 +107,7 @@ impl ContextMenuEntry {
     pub fn new(label: impl Into<SharedString>) -> Self {
         ContextMenuEntry {
             toggle: None,
-            label: label.into(),
+            label: localization::LocalizableString::User(label.into()),
             icon: None,
             custom_icon_path: None,
             custom_icon_svg: None,
@@ -120,6 +124,12 @@ impl ContextMenuEntry {
             end_slot_handler: None,
             show_end_slot_on_hover: false,
         }
+    }
+
+    pub fn localized(label: &'static str) -> Self {
+        let mut this = Self::new("");
+        this.label = localization::ui(label);
+        this
     }
 
     pub fn toggleable(mut self, toggle_position: IconPosition, toggled: bool) -> Self {
@@ -482,7 +492,15 @@ impl ContextMenu {
     }
 
     pub fn header(mut self, title: impl Into<SharedString>) -> Self {
-        self.items.push(ContextMenuItem::Header(title.into()));
+        self.items.push(ContextMenuItem::Header(
+            localization::LocalizableString::User(title.into()),
+        ));
+        self
+    }
+
+    pub fn header_localized(mut self, title: &'static str) -> Self {
+        self.items
+            .push(ContextMenuItem::Header(localization::ui(title)));
         self
     }
 
@@ -493,8 +511,22 @@ impl ContextMenu {
         link_url: impl Into<SharedString>,
     ) -> Self {
         self.items.push(ContextMenuItem::HeaderWithLink(
-            title.into(),
-            link_label.into(),
+            localization::LocalizableString::User(title.into()),
+            localization::LocalizableString::User(link_label.into()),
+            link_url.into(),
+        ));
+        self
+    }
+
+    pub fn header_with_link_localized(
+        mut self,
+        title: &'static str,
+        link_label: &'static str,
+        link_url: impl Into<SharedString>,
+    ) -> Self {
+        self.items.push(ContextMenuItem::HeaderWithLink(
+            localization::ui(title),
+            localization::ui(link_label),
             link_url.into(),
         ));
         self
@@ -527,7 +559,35 @@ impl ContextMenu {
     ) -> Self {
         self.items.push(ContextMenuItem::Entry(ContextMenuEntry {
             toggle: None,
-            label: label.into(),
+            label: localization::LocalizableString::User(label.into()),
+            handler: Rc::new(move |_, window, cx| handler(window, cx)),
+            secondary_handler: None,
+            icon: None,
+            custom_icon_path: None,
+            custom_icon_svg: None,
+            icon_position: IconPosition::End,
+            icon_size: IconSize::Small,
+            icon_color: None,
+            action,
+            disabled: false,
+            documentation_aside: None,
+            end_slot_icon: None,
+            end_slot_title: None,
+            end_slot_handler: None,
+            show_end_slot_on_hover: false,
+        }));
+        self
+    }
+
+    pub fn entry_localized(
+        mut self,
+        label: &'static str,
+        action: Option<Box<dyn Action>>,
+        handler: impl Fn(&mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.items.push(ContextMenuItem::Entry(ContextMenuEntry {
+            toggle: None,
+            label: localization::ui(label),
             handler: Rc::new(move |_, window, cx| handler(window, cx)),
             secondary_handler: None,
             icon: None,
@@ -558,7 +618,7 @@ impl ContextMenu {
     ) -> Self {
         self.items.push(ContextMenuItem::Entry(ContextMenuEntry {
             toggle: None,
-            label: label.into(),
+            label: localization::LocalizableString::User(label.into()),
             handler: Rc::new(move |_, window, cx| handler(window, cx)),
             secondary_handler: None,
             icon: None,
@@ -589,7 +649,7 @@ impl ContextMenu {
     ) -> Self {
         self.items.push(ContextMenuItem::Entry(ContextMenuEntry {
             toggle: None,
-            label: label.into(),
+            label: localization::LocalizableString::User(label.into()),
             handler: Rc::new(move |_, window, cx| handler(window, cx)),
             secondary_handler: None,
             icon: None,
@@ -619,7 +679,7 @@ impl ContextMenu {
     ) -> Self {
         self.items.push(ContextMenuItem::Entry(ContextMenuEntry {
             toggle: Some((position, toggled)),
-            label: label.into(),
+            label: localization::LocalizableString::User(label.into()),
             handler: Rc::new(move |_, window, cx| handler(window, cx)),
             secondary_handler: None,
             icon: None,
@@ -693,12 +753,24 @@ impl ContextMenu {
     }
 
     pub fn label(mut self, label: impl Into<SharedString>) -> Self {
-        self.items.push(ContextMenuItem::Label(label.into()));
+        self.items.push(ContextMenuItem::Label(
+            localization::LocalizableString::User(label.into()),
+        ));
+        self
+    }
+
+    pub fn label_localized(mut self, label: &'static str) -> Self {
+        self.items
+            .push(ContextMenuItem::Label(localization::ui(label)));
         self
     }
 
     pub fn action(self, label: impl Into<SharedString>, action: Box<dyn Action>) -> Self {
         self.action_checked(label, action, false)
+    }
+
+    pub fn action_localized(self, label: &'static str, action: Box<dyn Action>) -> Self {
+        self.action_checked_localized(label, action, false)
     }
 
     pub fn action_checked(
@@ -710,6 +782,15 @@ impl ContextMenu {
         self.action_checked_with_disabled(label, action, checked, false)
     }
 
+    pub fn action_checked_localized(
+        self,
+        label: &'static str,
+        action: Box<dyn Action>,
+        checked: bool,
+    ) -> Self {
+        self.action_checked_with_disabled_localized(label, action, checked, false)
+    }
+
     pub fn action_checked_with_disabled(
         mut self,
         label: impl Into<SharedString>,
@@ -717,13 +798,53 @@ impl ContextMenu {
         checked: bool,
         disabled: bool,
     ) -> Self {
+        let label = localization::LocalizableString::User(label.into());
         self.items.push(ContextMenuItem::Entry(ContextMenuEntry {
             toggle: if checked {
                 Some((IconPosition::Start, true))
             } else {
                 None
             },
-            label: label.into(),
+            label,
+            action: Some(action.boxed_clone()),
+            handler: Rc::new(move |context, window, cx| {
+                if let Some(context) = &context {
+                    window.focus(context, cx);
+                }
+                window.dispatch_action(action.boxed_clone(), cx);
+            }),
+            secondary_handler: None,
+            icon: None,
+            custom_icon_path: None,
+            custom_icon_svg: None,
+            icon_position: IconPosition::End,
+            icon_size: IconSize::Small,
+            icon_color: None,
+            disabled,
+            documentation_aside: None,
+            end_slot_icon: None,
+            end_slot_title: None,
+            end_slot_handler: None,
+            show_end_slot_on_hover: false,
+        }));
+        self
+    }
+
+    pub fn action_checked_with_disabled_localized(
+        mut self,
+        label: &'static str,
+        action: Box<dyn Action>,
+        checked: bool,
+        disabled: bool,
+    ) -> Self {
+        let label = localization::ui(label);
+        self.items.push(ContextMenuItem::Entry(ContextMenuEntry {
+            toggle: if checked {
+                Some((IconPosition::Start, true))
+            } else {
+                None
+            },
+            label,
             action: Some(action.boxed_clone()),
             handler: Rc::new(move |context, window, cx| {
                 if let Some(context) = &context {
@@ -754,9 +875,44 @@ impl ContextMenu {
         label: impl Into<SharedString>,
         action: Box<dyn Action>,
     ) -> Self {
+        let label = localization::LocalizableString::User(label.into());
         self.items.push(ContextMenuItem::Entry(ContextMenuEntry {
             toggle: None,
-            label: label.into(),
+            label,
+            action: Some(action.boxed_clone()),
+            handler: Rc::new(move |context, window, cx| {
+                if let Some(context) = &context {
+                    window.focus(context, cx);
+                }
+                window.dispatch_action(action.boxed_clone(), cx);
+            }),
+            secondary_handler: None,
+            icon: None,
+            custom_icon_path: None,
+            custom_icon_svg: None,
+            icon_size: IconSize::Small,
+            icon_position: IconPosition::End,
+            icon_color: None,
+            disabled,
+            documentation_aside: None,
+            end_slot_icon: None,
+            end_slot_title: None,
+            end_slot_handler: None,
+            show_end_slot_on_hover: false,
+        }));
+        self
+    }
+
+    pub fn action_disabled_when_localized(
+        mut self,
+        disabled: bool,
+        label: &'static str,
+        action: Box<dyn Action>,
+    ) -> Self {
+        let label = localization::ui(label);
+        self.items.push(ContextMenuItem::Entry(ContextMenuEntry {
+            toggle: None,
+            label,
             action: Some(action.boxed_clone()),
             handler: Rc::new(move |context, window, cx| {
                 if let Some(context) = &context {
@@ -791,9 +947,10 @@ impl ContextMenu {
         action: Box<dyn Action>,
         handler: impl Fn(&mut Window, &mut App) + 'static,
     ) -> Self {
+        let label = localization::LocalizableString::User(label.into());
         self.items.push(ContextMenuItem::Entry(ContextMenuEntry {
             toggle: None,
-            label: label.into(),
+            label,
             action: Some(action.boxed_clone()),
             handler: Rc::new(move |_, window, cx| {
                 handler(window, cx);
@@ -822,7 +979,21 @@ impl ContextMenu {
         builder: impl Fn(ContextMenu, &mut Window, &mut Context<ContextMenu>) -> ContextMenu + 'static,
     ) -> Self {
         self.items.push(ContextMenuItem::Submenu {
-            label: label.into(),
+            label: localization::LocalizableString::User(label.into()),
+            icon: None,
+            icon_color: None,
+            builder: Rc::new(builder),
+        });
+        self
+    }
+
+    pub fn submenu_localized(
+        mut self,
+        label: &'static str,
+        builder: impl Fn(ContextMenu, &mut Window, &mut Context<ContextMenu>) -> ContextMenu + 'static,
+    ) -> Self {
+        self.items.push(ContextMenuItem::Submenu {
+            label: localization::ui(label),
             icon: None,
             icon_color: None,
             builder: Rc::new(builder),
@@ -837,7 +1008,7 @@ impl ContextMenu {
         builder: impl Fn(ContextMenu, &mut Window, &mut Context<ContextMenu>) -> ContextMenu + 'static,
     ) -> Self {
         self.items.push(ContextMenuItem::Submenu {
-            label: label.into(),
+            label: localization::LocalizableString::User(label.into()),
             icon: Some(icon),
             icon_color: None,
             builder: Rc::new(builder),
@@ -853,7 +1024,7 @@ impl ContextMenu {
         builder: impl Fn(ContextMenu, &mut Window, &mut Context<ContextMenu>) -> ContextMenu + 'static,
     ) -> Self {
         self.items.push(ContextMenuItem::Submenu {
-            label: label.into(),
+            label: localization::LocalizableString::User(label.into()),
             icon: Some(icon),
             icon_color: Some(icon_color),
             builder: Rc::new(builder),
@@ -1393,16 +1564,16 @@ impl ContextMenu {
     ) -> impl IntoElement + use<> {
         match item {
             ContextMenuItem::Separator => ListSeparator.into_any_element(),
-            ContextMenuItem::Header(header) => ListSubHeader::new(header.clone())
+            ContextMenuItem::Header(header) => ListSubHeader::new(header.clone().resolve(cx))
                 .inset(true)
                 .into_any_element(),
             ContextMenuItem::HeaderWithLink(header, label, url) => {
                 let url = url.clone();
                 let link_id = ElementId::Name(format!("link-{}", url).into());
-                ListSubHeader::new(header.clone())
+                ListSubHeader::new(header.clone().resolve(cx))
                     .inset(true)
                     .end_slot(
-                        Button::new(link_id, label.clone())
+                        Button::new(link_id, label.clone().resolve(cx))
                             .color(Color::Muted)
                             .label_size(LabelSize::Small)
                             .size(ButtonSize::None)
@@ -1418,7 +1589,7 @@ impl ContextMenu {
             ContextMenuItem::Label(label) => ListItem::new(ix)
                 .inset(true)
                 .disabled(true)
-                .child(Label::new(label.clone()))
+                .child(Label::new(label.clone().resolve(cx)))
                 .into_any_element(),
             ContextMenuItem::Entry(entry) => {
                 self.render_menu_entry(ix, entry, cx).into_any_element()
@@ -1500,7 +1671,7 @@ impl ContextMenu {
                 icon_color,
                 ..
             } => self
-                .render_submenu_item_trigger(ix, label.clone(), *icon, *icon_color, cx)
+                .render_submenu_item_trigger(ix, label.clone().resolve(cx), *icon, *icon_color, cx)
                 .into_any_element(),
         }
     }
@@ -1744,6 +1915,7 @@ impl ContextMenu {
             secondary_handler: _,
         } = entry;
         let this = cx.weak_entity();
+        let label = label.clone().resolve(cx);
 
         let handler = handler.clone();
         let menu = cx.entity().downgrade();

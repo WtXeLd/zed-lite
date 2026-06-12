@@ -6,8 +6,8 @@ use gpui::{
     ManagedView, MouseButton, Pixels, Render, Subscription, Task, TaskExt, Tiling, WeakEntity,
     Window, WindowId, actions, deferred, px,
 };
-pub use project::ProjectGroupKey;
 use project::Project;
+pub use project::ProjectGroupKey;
 use std::future::Future;
 
 use std::path::PathBuf;
@@ -1010,11 +1010,7 @@ impl MultiWorkspace {
     }
 
     /// Finds an existing workspace whose root paths exactly match.
-    pub fn workspace_for_paths(
-        &self,
-        path_list: &PathList,
-        cx: &App,
-    ) -> Option<Entity<Workspace>> {
+    pub fn workspace_for_paths(&self, path_list: &PathList, cx: &App) -> Option<Entity<Workspace>> {
         self.workspace_for_paths_excluding(path_list, &[], cx)
     }
 
@@ -1139,11 +1135,7 @@ impl MultiWorkspace {
                 && let Some(workspace) = requesting_window
                     .update(cx, |multi_workspace, window, cx| {
                         multi_workspace
-                            .workspace_for_paths_excluding(
-                                &effective_path_list,
-                                &excluding,
-                                cx,
-                            )
+                            .workspace_for_paths_excluding(&effective_path_list, &excluding, cx)
                             .inspect(|workspace| {
                                 multi_workspace.activate(
                                     workspace.clone(),

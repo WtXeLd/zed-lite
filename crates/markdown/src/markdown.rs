@@ -2700,7 +2700,7 @@ fn image_fallback_element(dest_url: SharedString, alt_text: Option<SharedString>
         .cursor_pointer()
         .min_w_0()
         .child(Label::new(label).color(Color::Warning).underline())
-        .tooltip(Tooltip::text(
+        .tooltip(Tooltip::localized_text(
             "Image failed to load. Open `zed: log` for more details.",
         ))
         .on_click(move |_, _, cx| cx.open_url(&dest_url))
@@ -2765,7 +2765,7 @@ fn render_wrap_code_block_button(
     IconButton::new(("wrap-code-block", id), icon)
         .icon_size(IconSize::Small)
         .icon_color(Color::Muted)
-        .tooltip(Tooltip::text(tooltip))
+        .tooltip(Tooltip::localized_text(tooltip))
         .on_click(move |_event, _window, cx| {
             markdown.update(cx, |markdown, cx| {
                 markdown.toggle_code_block_wrap(id);

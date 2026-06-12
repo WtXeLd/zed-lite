@@ -17,8 +17,7 @@ use std::time::Duration;
 use text::OffsetRangeExt as _;
 
 use crate::{
-    CodeAction, LspAction, LspStore, LspStoreEvent, Project,
-    lsp_command::GetCodeLens,
+    CodeAction, LspAction, LspStore, LspStoreEvent, Project, lsp_command::GetCodeLens,
     project_settings::ProjectSettings,
 };
 
@@ -217,9 +216,9 @@ impl LspStore {
     ) -> Task<Result<Option<HashMap<LanguageServerId, Vec<CodeAction>>>>> {
         let code_lens_actions_task =
             self.request_multiple_lsp_locally(buffer, None::<usize>, GetCodeLens, cx);
-        cx.background_spawn(async move {
-            Ok(Some(code_lens_actions_task.await.into_iter().collect()))
-        })
+        cx.background_spawn(
+            async move { Ok(Some(code_lens_actions_task.await.into_iter().collect())) },
+        )
     }
 
     /// Resolves a single code lens via `codeLens/resolve`, identified by

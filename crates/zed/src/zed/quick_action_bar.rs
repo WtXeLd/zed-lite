@@ -165,7 +165,7 @@ impl Render for QuickActionBar {
                         .toggle_state(is_deployed)
                         .when(!is_deployed, |this| {
                             this.when(has_available_code_actions, |this| {
-                                this.tooltip(Tooltip::for_action_title(
+                                this.tooltip(Tooltip::for_localized_action_title(
                                     "Code Actions",
                                     &ToggleCodeActions::default(),
                                 ))
@@ -173,7 +173,7 @@ impl Render for QuickActionBar {
                             .when(
                                 !has_available_code_actions,
                                 |this| {
-                                    this.tooltip(Tooltip::for_action_title(
+                                    this.tooltip(Tooltip::for_localized_action_title(
                                         "No Code Actions Available",
                                         &ToggleCodeActions::default(),
                                     ))
@@ -222,7 +222,7 @@ impl Render for QuickActionBar {
                         .icon_size(IconSize::Small)
                         .style(ButtonStyle::Subtle)
                         .toggle_state(self.toggle_selections_handle.is_deployed()),
-                    Tooltip::text("Selection Controls"),
+                    Tooltip::localized_text("Selection Controls"),
                 )
                 .with_handle(self.toggle_selections_handle.clone())
                 .anchor(Anchor::TopRight)
@@ -230,15 +230,15 @@ impl Render for QuickActionBar {
                     let focus = focus.clone();
                     let menu = ContextMenu::build(window, cx, move |menu, _, _| {
                         menu.context(focus.clone())
-                            .action("Select All", Box::new(SelectAll))
+                            .action_localized("Select All", Box::new(SelectAll))
                             .action(
                                 "Select Next Occurrence",
                                 Box::new(SelectNext {
                                     replace_newest: false,
                                 }),
                             )
-                            .action("Expand Selection", Box::new(SelectLargerSyntaxNode))
-                            .action("Shrink Selection", Box::new(SelectSmallerSyntaxNode))
+                            .action_localized("Expand Selection", Box::new(SelectLargerSyntaxNode))
+                            .action_localized("Shrink Selection", Box::new(SelectSmallerSyntaxNode))
                             .action(
                                 "Add Cursor Above",
                                 Box::new(AddSelectionAbove {
@@ -252,25 +252,29 @@ impl Render for QuickActionBar {
                                 }),
                             )
                             .separator()
-                            .action("Go to Symbol", Box::new(ToggleOutline))
-                            .action("Go to Line/Column", Box::new(ToggleGoToLine))
+                            .action_localized("Go to Symbol", Box::new(ToggleOutline))
+                            .action_localized("Go to Line/Column", Box::new(ToggleGoToLine))
                             .separator()
-                            .action("Next Problem", Box::new(GoToDiagnostic::default()))
-                            .action(
+                            .action_localized("Next Problem", Box::new(GoToDiagnostic::default()))
+                            .action_localized(
                                 "Previous Problem",
                                 Box::new(GoToPreviousDiagnostic::default()),
                             )
                             .separator()
-                            .action_disabled_when(!has_diff_hunks, "Next Hunk", Box::new(GoToHunk))
-                            .action_disabled_when(
+                            .action_disabled_when_localized(
+                                !has_diff_hunks,
+                                "Next Hunk",
+                                Box::new(GoToHunk),
+                            )
+                            .action_disabled_when_localized(
                                 !has_diff_hunks,
                                 "Previous Hunk",
                                 Box::new(GoToPreviousHunk),
                             )
                             .separator()
-                            .action("Move Line Up", Box::new(MoveLineUp))
-                            .action("Move Line Down", Box::new(MoveLineDown))
-                            .action("Duplicate Selection", Box::new(DuplicateLineDown))
+                            .action_localized("Move Line Up", Box::new(MoveLineUp))
+                            .action_localized("Move Line Down", Box::new(MoveLineDown))
+                            .action_localized("Duplicate Selection", Box::new(DuplicateLineDown))
                     });
                     Some(menu)
                 })
@@ -288,7 +292,7 @@ impl Render for QuickActionBar {
                         .icon_size(IconSize::Small)
                         .style(ButtonStyle::Subtle)
                         .toggle_state(self.toggle_settings_handle.is_deployed()),
-                    Tooltip::text("Editor Controls"),
+                    Tooltip::localized_text("Editor Controls"),
                 )
                 .anchor(Anchor::TopRight)
                 .with_handle(self.toggle_settings_handle.clone())
@@ -430,7 +434,7 @@ impl Render for QuickActionBar {
                                 );
 
                                 if supports_inline_diagnostics {
-                                    let mut inline_diagnostics_item = ContextMenuEntry::new("Inline Diagnostics")
+                                    let mut inline_diagnostics_item = ContextMenuEntry::localized("Inline Diagnostics")
                                         .toggleable(IconPosition::Start, diagnostics_enabled && inline_diagnostics_enabled)
                                         .action(ToggleInlineDiagnostics.boxed_clone())
                                         .handler({
@@ -448,7 +452,7 @@ impl Render for QuickActionBar {
                                             }
                                         });
                                     if !diagnostics_enabled {
-                                        inline_diagnostics_item = inline_diagnostics_item.disabled(true).documentation_aside(DocumentationSide::Left, |_|  Label::new("Inline diagnostics are not available until regular diagnostics are enabled.").into_any_element());
+                                        inline_diagnostics_item = inline_diagnostics_item.disabled(true).documentation_aside(DocumentationSide::Left, |_|  Label::localized("Inline diagnostics are not available until regular diagnostics are enabled.").into_any_element());
                                     }
                                     menu = menu.item(inline_diagnostics_item)
                                 }

@@ -264,12 +264,19 @@ impl Item for CsvPreviewView {
             .and_then(|b| {
                 let file = b.read(cx).file()?;
                 let local_file = file.as_local()?;
-                local_file
-                    .abs_path(cx)
-                    .file_name()
-                    .map(|name| format!("Preview {}", name.to_string_lossy()).into())
+                local_file.abs_path(cx).file_name().map(|name| {
+                    let file_name = name.to_string_lossy();
+                    match localization::current_language(cx) {
+                        localization::UiLanguage::ChineseSimplified => {
+                            format!("预览 {}", file_name).into()
+                        }
+                        localization::UiLanguage::English => {
+                            format!("Preview {}", file_name).into()
+                        }
+                    }
+                })
             })
-            .unwrap_or_else(|| SharedString::from("CSV Preview"))
+            .unwrap_or_else(|| localization::t(cx, "CSV Preview"))
     }
 }
 

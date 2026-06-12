@@ -31,6 +31,7 @@ git_ui.workspace = true
 git.workspace = true
 gpui.workspace = true
 itertools.workspace = true
+localization.workspace = true
 menu.workspace = true
 pretty_assertions.workspace = true
 project.workspace = true

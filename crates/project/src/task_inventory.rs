@@ -696,8 +696,6 @@ impl Inventory {
 
         Ok(())
     }
-
-
 }
 
 fn task_lru_comparator(

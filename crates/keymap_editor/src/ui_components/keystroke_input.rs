@@ -502,7 +502,7 @@ impl Render for KeystrokeInput {
             .rounded_sm()
             .child(recording_pulse(Color::Error))
             .child(
-                Label::new("REC")
+                Label::localized("REC")
                     .size(LabelSize::XSmall)
                     .weight(FontWeight::SEMIBOLD)
                     .color(Color::Error),
@@ -520,7 +520,7 @@ impl Render for KeystrokeInput {
             .rounded_sm()
             .child(recording_pulse(Color::Accent))
             .child(
-                Label::new("SEARCH")
+                Label::localized("SEARCH")
                     .size(LabelSize::XSmall)
                     .weight(FontWeight::SEMIBOLD)
                     .color(Color::Accent),
@@ -608,7 +608,7 @@ impl Render for KeystrokeInput {
                                 IconButton::new("stop-record-btn", IconName::Stop)
                                     .shape(IconButtonShape::Square)
                                     .map(|this| {
-                                        this.tooltip(Tooltip::for_action_title(
+                                        this.tooltip(Tooltip::for_localized_action_title(
                                             if self.search {
                                                 "Stop Searching"
                                             } else {
@@ -627,7 +627,7 @@ impl Render for KeystrokeInput {
                                 IconButton::new("record-btn", record_icon)
                                     .shape(IconButtonShape::Square)
                                     .map(|this| {
-                                        this.tooltip(Tooltip::for_action_title(
+                                        this.tooltip(Tooltip::for_localized_action_title(
                                             if self.search {
                                                 "Start Searching"
                                             } else {

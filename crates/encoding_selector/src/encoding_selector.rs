@@ -57,7 +57,7 @@ impl EncodingSelector {
 
         if buffer_handle.is_dirty() {
             workspace.show_toast(
-                Toast::new(
+                Toast::localized(
                     NotificationId::unique::<EncodingSelector>(),
                     "Save file to change encoding",
                 ),
@@ -201,6 +201,10 @@ impl PickerDelegate for EncodingSelectorDelegate {
 
     fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
         "Reopen with encoding...".into()
+    }
+
+    fn localized_placeholder_text(&self) -> Option<&'static str> {
+        Some("Reopen with encoding...")
     }
 
     fn match_count(&self) -> usize {

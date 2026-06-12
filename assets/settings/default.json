@@ -23,6 +23,10 @@
   // 5. "SublimeText"
   // 6. "TextMate"
   "base_keymap": "VSCode",
+  // The language used for Zed Lite's UI and application menus.
+  //
+  // Supported values: "en", "zh-CN"
+  "ui_language": "en",
   // The name of a font to use for rendering text in the editor
   // ".ZedMono" currently aliases to Lilex
   // but this may change in the future.

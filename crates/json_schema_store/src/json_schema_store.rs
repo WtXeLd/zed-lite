@@ -78,7 +78,6 @@ pub fn init(cx: &mut App) {
         })
         .detach();
     }
-
 }
 
 #[derive(Default)]

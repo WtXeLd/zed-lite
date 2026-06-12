@@ -7,8 +7,8 @@ use gpui::{Action, AnyElement, AnyView, AppContext, FocusHandle, IntoElement, Re
 
 #[derive(RegisterComponent)]
 pub struct Tooltip {
-    title: Title,
-    meta: Option<SharedString>,
+    title: TooltipTitle,
+    meta: Option<localization::LocalizableString>,
     key_binding: Option<KeyBinding>,
 }
 
@@ -18,9 +18,21 @@ enum Title {
     Callback(Rc<dyn Fn(&mut Window, &mut App) -> AnyElement>),
 }
 
+#[derive(Clone, IntoElement)]
+enum TooltipTitle {
+    Text(localization::LocalizableString),
+    Custom(Title),
+}
+
 impl From<SharedString> for Title {
     fn from(value: SharedString) -> Self {
         Title::Str(value)
+    }
+}
+
+impl From<localization::LocalizableString> for TooltipTitle {
+    fn from(value: localization::LocalizableString) -> Self {
+        Self::Text(value)
     }
 }
 
@@ -33,17 +45,28 @@ impl RenderOnce for Title {
     }
 }
 
+impl RenderOnce for TooltipTitle {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl gpui::IntoElement {
+        match self {
+            TooltipTitle::Text(title) => title.resolve(cx).into_any_element(),
+            TooltipTitle::Custom(element) => element.render(window, cx).into_any_element(),
+        }
+    }
+}
+
 impl Tooltip {
-    pub fn simple(title: impl Into<SharedString>, cx: &mut App) -> AnyView {
+    pub fn simple(title: impl Into<localization::LocalizableString>, cx: &mut App) -> AnyView {
         cx.new(|_| Self {
-            title: Title::Str(title.into()),
+            title: title.into().into(),
             meta: None,
             key_binding: None,
         })
         .into()
     }
 
-    pub fn text(title: impl Into<SharedString>) -> impl Fn(&mut Window, &mut App) -> AnyView {
+    pub fn text(
+        title: impl Into<localization::LocalizableString>,
+    ) -> impl Fn(&mut Window, &mut App) -> AnyView {
         let title = title.into();
         move |_, cx| {
             cx.new(|_| Self {
@@ -55,6 +78,10 @@ impl Tooltip {
         }
     }
 
+    pub fn localized_text(title: &'static str) -> impl Fn(&mut Window, &mut App) -> AnyView {
+        Self::text(localization::ui(title))
+    }
+
     pub fn for_action_title<T: Into<SharedString>>(
         title: T,
         action: &dyn Action,
@@ -63,7 +90,7 @@ impl Tooltip {
         let action = action.boxed_clone();
         move |_, cx| {
             cx.new(|cx| Self {
-                title: Title::Str(title.clone()),
+                title: localization::LocalizableString::User(title.clone()).into(),
                 meta: None,
                 key_binding: Some(KeyBinding::for_action(action.as_ref(), cx)),
             })
@@ -81,7 +108,43 @@ impl Tooltip {
         let focus_handle = focus_handle.clone();
         move |_, cx| {
             cx.new(|cx| Self {
-                title: Title::Str(title.clone()),
+                title: localization::LocalizableString::User(title.clone()).into(),
+                meta: None,
+                key_binding: Some(KeyBinding::for_action_in(
+                    action.as_ref(),
+                    &focus_handle,
+                    cx,
+                )),
+            })
+            .into()
+        }
+    }
+
+    pub fn for_localized_action_title(
+        title: &'static str,
+        action: &dyn Action,
+    ) -> impl Fn(&mut Window, &mut App) -> AnyView + use<> {
+        let action = action.boxed_clone();
+        move |_, cx| {
+            cx.new(|cx| Self {
+                title: localization::ui(title).into(),
+                meta: None,
+                key_binding: Some(KeyBinding::for_action(action.as_ref(), cx)),
+            })
+            .into()
+        }
+    }
+
+    pub fn for_localized_action_title_in(
+        title: &'static str,
+        action: &dyn Action,
+        focus_handle: &FocusHandle,
+    ) -> impl Fn(&mut Window, &mut App) -> AnyView + use<> {
+        let action = action.boxed_clone();
+        let focus_handle = focus_handle.clone();
+        move |_, cx| {
+            cx.new(|cx| Self {
+                title: localization::ui(title).into(),
                 meta: None,
                 key_binding: Some(KeyBinding::for_action_in(
                     action.as_ref(),
@@ -99,7 +162,16 @@ impl Tooltip {
         cx: &mut App,
     ) -> AnyView {
         cx.new(|cx| Self {
-            title: Title::Str(title.into()),
+            title: localization::LocalizableString::User(title.into()).into(),
+            meta: None,
+            key_binding: Some(KeyBinding::for_action(action, cx)),
+        })
+        .into()
+    }
+
+    pub fn for_localized_action(title: &'static str, action: &dyn Action, cx: &mut App) -> AnyView {
+        cx.new(|cx| Self {
+            title: localization::ui(title).into(),
             meta: None,
             key_binding: Some(KeyBinding::for_action(action, cx)),
         })
@@ -113,7 +185,7 @@ impl Tooltip {
         cx: &mut App,
     ) -> AnyView {
         cx.new(|cx| Self {
-            title: title.into().into(),
+            title: localization::LocalizableString::User(title.into()).into(),
             meta: None,
             key_binding: Some(KeyBinding::for_action_in(action, focus_handle, cx)),
         })
@@ -127,8 +199,22 @@ impl Tooltip {
         cx: &mut App,
     ) -> AnyView {
         cx.new(|cx| Self {
-            title: title.into().into(),
-            meta: Some(meta.into()),
+            title: localization::LocalizableString::User(title.into()).into(),
+            meta: Some(localization::LocalizableString::User(meta.into())),
+            key_binding: action.map(|action| KeyBinding::for_action(action, cx)),
+        })
+        .into()
+    }
+
+    pub fn with_localized_meta(
+        title: &'static str,
+        action: Option<&dyn Action>,
+        meta: &'static str,
+        cx: &mut App,
+    ) -> AnyView {
+        cx.new(|cx| Self {
+            title: localization::ui(title).into(),
+            meta: Some(localization::ui(meta)),
             key_binding: action.map(|action| KeyBinding::for_action(action, cx)),
         })
         .into()
@@ -142,8 +228,8 @@ impl Tooltip {
         cx: &mut App,
     ) -> AnyView {
         cx.new(|cx| Self {
-            title: title.into().into(),
-            meta: Some(meta.into()),
+            title: localization::LocalizableString::User(title.into()).into(),
+            meta: Some(localization::LocalizableString::User(meta.into())),
             key_binding: action.map(|action| KeyBinding::for_action_in(action, focus_handle, cx)),
         })
         .into()
@@ -151,7 +237,7 @@ impl Tooltip {
 
     pub fn new(title: impl Into<SharedString>) -> Self {
         Self {
-            title: title.into().into(),
+            title: localization::LocalizableString::User(title.into()).into(),
             meta: None,
             key_binding: None,
         }
@@ -159,7 +245,7 @@ impl Tooltip {
 
     pub fn new_element(title: impl Fn(&mut Window, &mut App) -> AnyElement + 'static) -> Self {
         Self {
-            title: Title::Callback(Rc::new(title)),
+            title: TooltipTitle::Custom(Title::Callback(Rc::new(title))),
             meta: None,
             key_binding: None,
         }
@@ -172,7 +258,7 @@ impl Tooltip {
         move |_, cx| {
             let title = title.clone();
             cx.new(|_| Self {
-                title,
+                title: TooltipTitle::Custom(title),
                 meta: None,
                 key_binding: None,
             })
@@ -181,7 +267,7 @@ impl Tooltip {
     }
 
     pub fn meta(mut self, meta: impl Into<SharedString>) -> Self {
-        self.meta = Some(meta.into());
+        self.meta = Some(localization::LocalizableString::User(meta.into()));
         self
     }
 
@@ -193,6 +279,8 @@ impl Tooltip {
 
 impl Render for Tooltip {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let meta = self.meta.clone().map(|meta| meta.resolve(cx));
+
         tooltip_container(cx, |el, _| {
             el.child(
                 h_flex()
@@ -202,7 +290,7 @@ impl Render for Tooltip {
                         this.justify_between().child(key_binding)
                     }),
             )
-            .when_some(self.meta.clone(), |this, meta| {
+            .when_some(meta, |this, meta| {
                 this.child(
                     div()
                         .max_w_72()

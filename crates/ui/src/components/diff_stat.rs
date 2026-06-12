@@ -1,5 +1,6 @@
 use crate::Tooltip;
 use crate::prelude::*;
+use localization::LocalizableString;
 use num_format::{Locale, ToFormattedString};
 
 #[derive(IntoElement, RegisterComponent)]
@@ -8,7 +9,7 @@ pub struct DiffStat {
     added: usize,
     removed: usize,
     label_size: LabelSize,
-    tooltip: Option<SharedString>,
+    tooltip: Option<LocalizableString>,
 }
 
 impl DiffStat {
@@ -28,7 +29,12 @@ impl DiffStat {
     }
 
     pub fn tooltip(mut self, tooltip: impl Into<SharedString>) -> Self {
-        self.tooltip = Some(tooltip.into());
+        self.tooltip = Some(LocalizableString::User(tooltip.into()));
+        self
+    }
+
+    pub fn localized_tooltip(mut self, tooltip: &'static str) -> Self {
+        self.tooltip = Some(localization::ui(tooltip));
         self
     }
 }

@@ -116,9 +116,9 @@ fn files_not_created_on_launch(errors: HashMap<io::ErrorKind, Vec<&Path>>) {
                     .update(cx, |_, window, cx| {
                         let response = window.prompt(
                             gpui::PromptLevel::Critical,
-                            message,
+                            localization::t(cx, message).as_ref(),
                             Some(&error_details),
-                            &["Exit"],
+                            &[localization::prompt_button(cx, "Exit")],
                             cx,
                         );
 
@@ -611,6 +611,9 @@ fn main() {
                         client.reconnect(&cx.to_async());
                     }
                 }
+
+                let menus = app_menus(cx);
+                cx.set_menus(menus);
             }
         })
         .detach();
@@ -1278,7 +1281,6 @@ struct Args {
     /// Output current environment variables as JSON to stdout
     #[arg(long, hide = true)]
     printenv: bool,
-
 }
 
 #[derive(Clone, Debug)]

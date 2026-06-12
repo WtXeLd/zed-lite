@@ -279,6 +279,9 @@ impl SvgPreviewView {
 
 impl Render for SvgPreviewView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let failed_to_load = localization::t(cx, "Failed to load SVG image");
+        let no_svg_selected = localization::t(cx, "No SVG file selected");
+
         v_flex()
             .id("SvgPreview")
             .key_context("SvgPreview")
@@ -290,17 +293,18 @@ impl Render for SvgPreviewView {
             .items_center()
             .map(|this| match self.current_svg.clone() {
                 Some(Ok(image)) => {
-                    this.child(img(image).max_w_full().max_h_full().with_fallback(|| {
+                    let failed_to_load = failed_to_load.clone();
+                    this.child(img(image).max_w_full().max_h_full().with_fallback(move || {
                         h_flex()
                             .p_4()
                             .gap_2()
                             .child(Icon::new(IconName::Warning))
-                            .child("Failed to load SVG image")
+                            .child(failed_to_load.clone())
                             .into_any_element()
                     }))
                 }
                 Some(Err(e)) => this.child(div().p_4().child(e).into_any_element()),
-                None => this.child(div().p_4().child("No SVG file selected")),
+                None => this.child(div().p_4().child(no_svg_selected)),
             })
     }
 }
@@ -329,8 +333,15 @@ impl Item for SvgPreviewView {
         self.buffer
             .as_ref()
             .and_then(|svg_path| svg_path.read(cx).file())
-            .map(|name| format!("Preview {}", name.file_name(cx)).into())
-            .unwrap_or_else(|| "SVG Preview".into())
+            .map(|name| match localization::current_language(cx) {
+                localization::UiLanguage::ChineseSimplified => {
+                    format!("预览 {}", name.file_name(cx)).into()
+                }
+                localization::UiLanguage::English => {
+                    format!("Preview {}", name.file_name(cx)).into()
+                }
+            })
+            .unwrap_or_else(|| localization::t(cx, "SVG Preview"))
     }
 
     fn telemetry_event_text(&self) -> Option<&'static str> {

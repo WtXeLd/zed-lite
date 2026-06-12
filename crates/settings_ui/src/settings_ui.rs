@@ -431,11 +431,11 @@ fn init_renderers(cx: &mut App) {
                     settings_window,
                     item,
                     settings_file,
-                    Button::new("open-in-settings-file", "Edit in settings.json")
+                    Button::localized("open-in-settings-file", "Edit in settings.json")
                         .style(ButtonStyle::Outlined)
                         .size(ButtonSize::Medium)
                         .tab_index(0_isize)
-                        .tooltip(Tooltip::for_action_title_in(
+                        .tooltip(Tooltip::for_localized_action_title_in(
                             "Edit in settings.json",
                             &OpenCurrentFile,
                             &settings_window.focus_handle,
@@ -461,6 +461,7 @@ fn init_renderers(cx: &mut App) {
         .add_basic_renderer::<settings::TextRenderingMode>(render_dropdown)
         .add_basic_renderer::<settings::FontFamilyName>(render_font_picker)
         .add_basic_renderer::<settings::BaseKeymapContent>(render_dropdown)
+        .add_basic_renderer::<settings::UiLanguage>(render_dropdown)
         .add_basic_renderer::<settings::MultiCursorModifier>(render_dropdown)
         .add_basic_renderer::<settings::HideMouseMode>(render_dropdown)
         .add_basic_renderer::<settings::CurrentLineHighlight>(render_dropdown)
@@ -976,14 +977,20 @@ impl SettingsPageItem {
                                 .relative()
                                 .w_full()
                                 .max_w_1_2()
-                                .child(Label::new(sub_page_link.title.clone()))
+                                .child(Label::new(localization::t_shared_if_known(
+                                    cx,
+                                    &sub_page_link.title,
+                                )))
                                 .when_some(
                                     sub_page_link.description.as_ref(),
                                     |this, description| {
                                         this.child(
-                                            Label::new(description.clone())
-                                                .size(LabelSize::Small)
-                                                .color(Color::Muted),
+                                            Label::new(localization::t_shared_if_known(
+                                                cx,
+                                                description,
+                                            ))
+                                            .size(LabelSize::Small)
+                                            .color(Color::Muted),
                                         )
                                     },
                                 ),
@@ -1111,14 +1118,20 @@ impl SettingsPageItem {
                                 .relative()
                                 .w_full()
                                 .max_w_1_2()
-                                .child(Label::new(action_link.title.clone()))
+                                .child(Label::new(localization::t_shared_if_known(
+                                    cx,
+                                    &action_link.title,
+                                )))
                                 .when_some(
                                     action_link.description.as_ref(),
                                     |this, description| {
                                         this.child(
-                                            Label::new(description.clone())
-                                                .size(LabelSize::Small)
-                                                .color(Color::Muted),
+                                            Label::new(localization::t_shared_if_known(
+                                                cx,
+                                                description,
+                                            ))
+                                            .size(LabelSize::Small)
+                                            .color(Color::Muted),
                                         )
                                     },
                                 ),
@@ -1175,7 +1188,7 @@ fn render_settings_item(
                     h_flex()
                         .w_full()
                         .gap_1()
-                        .child(Label::new(SharedString::new_static(setting_item.title)))
+                        .child(Label::localized(setting_item.title))
                         .when_some(
                             if sub_field {
                                 None
@@ -1189,7 +1202,9 @@ fn render_settings_item(
                                     IconButton::new("reset-to-default-btn", IconName::Undo)
                                         .icon_color(Color::Muted)
                                         .icon_size(IconSize::Small)
-                                        .tooltip(Tooltip::text("Reset to Default"))
+                                        .tooltip(Tooltip::text(localization::ui(
+                                            "Reset to Default",
+                                        )))
                                         .on_click({
                                             move |_, window, cx| {
                                                 reset_to_default(window, cx);
@@ -1215,7 +1230,7 @@ fn render_settings_item(
                         ),
                 )
                 .child(
-                    Label::new(SharedString::new_static(setting_item.description))
+                    Label::localized(setting_item.description)
                         .size(LabelSize::Small)
                         .color(Color::Muted)
                         .render_code_spans(),
@@ -1266,7 +1281,7 @@ fn render_settings_item_link(
                 .icon_color(link_icon_color)
                 .icon_size(IconSize::Small)
                 .shape(IconButtonShape::Square)
-                .tooltip(Tooltip::text("Copy Link"))
+                .tooltip(Tooltip::text(localization::ui("Copy Link")))
                 .when_some(json_path, |this, path| {
                     this.on_click(cx.listener(move |this, _, _, cx| {
                         let link = format!("zed://settings/{}", path);
@@ -1487,7 +1502,7 @@ impl SettingsWindow {
         let current_file = SettingsUiFile::User;
         let search_bar = cx.new(|cx| {
             let mut editor = Editor::single_line(window, cx);
-            editor.set_placeholder_text("Search settings…", window, cx);
+            editor.set_localized_placeholder_text("Search settings…", window, cx);
             editor
         });
         cx.subscribe(&search_bar, |this, _, event: &EditorEvent, cx| {
@@ -2502,7 +2517,9 @@ impl SettingsWindow {
                                         }),
                                     )
                                     .style(DropdownStyle::Subtle)
-                                    .trigger_tooltip(Tooltip::text("View Other Projects"))
+                                    .trigger_tooltip(Tooltip::text(localization::ui(
+                                        "View Other Projects",
+                                    )))
                                     .trigger_icon(IconName::ChevronDown)
                                     .attach(gpui::Anchor::BottomLeft)
                                     .offset(gpui::Point {
@@ -2515,10 +2532,10 @@ impl SettingsWindow {
                     }),
             )
             .child(
-                Button::new(edit_in_json_id, "Edit in settings.json")
+                Button::localized(edit_in_json_id, "Edit in settings.json")
                     .tab_index(0_isize)
                     .style(ButtonStyle::OutlinedGhost)
-                    .tooltip(Tooltip::for_action_title_in(
+                    .tooltip(Tooltip::for_localized_action_title_in(
                         "Edit in settings.json",
                         &OpenCurrentFile,
                         &self.focus_handle,
@@ -3032,11 +3049,18 @@ impl SettingsWindow {
             .items_center()
             .justify_center()
             .gap_1()
-            .child(Label::new("No Results"))
+            .child(Label::localized("No Results"))
             .child(
-                Label::new(format!("No settings match \"{}\"", search_query))
-                    .size(LabelSize::Small)
-                    .color(Color::Muted),
+                Label::new(format!(
+                    "{} \"{}\"",
+                    localization::translate(
+                        localization::current_language(cx),
+                        "No settings match"
+                    ),
+                    search_query
+                ))
+                .size(LabelSize::Small)
+                .color(Color::Muted),
             )
     }
 
@@ -3076,7 +3100,10 @@ impl SettingsWindow {
                             .when(this.sub_page_stack.is_empty(), |this| {
                                 this.when_some(root_nav_label, |this, title| {
                                     this.child(
-                                        Label::new(title).size(LabelSize::Large).mt_2().mb_3(),
+                                        Label::localized(title)
+                                            .size(LabelSize::Large)
+                                            .mt_2()
+                                            .mb_3(),
                                     )
                                 })
                             })
@@ -3179,7 +3206,7 @@ impl SettingsWindow {
             page_content
                 .when(self.sub_page_stack.is_empty(), |this| {
                     this.when_some(root_nav_label, |this, title| {
-                        this.child(Label::new(title).size(LabelSize::Large).mt_2().mb_3())
+                        this.child(Label::localized(title).size(LabelSize::Large).mt_2().mb_3())
                     })
                 })
                 .children(items.clone().into_iter().enumerate().map(
@@ -3241,10 +3268,10 @@ impl SettingsWindow {
                 .when(current_sub_page.link.in_json, |this| {
                     this.child(
                         div().flex_shrink_0().child(
-                            Button::new("open-in-settings-file", "Edit in settings.json")
+                            Button::localized("open-in-settings-file", "Edit in settings.json")
                                 .tab_index(0_isize)
                                 .style(ButtonStyle::OutlinedGhost)
-                                .tooltip(Tooltip::for_action_title_in(
+                                .tooltip(Tooltip::for_localized_action_title_in(
                                     "Edit in settings.json",
                                     &OpenCurrentFile,
                                     &self.focus_handle,
@@ -3294,7 +3321,7 @@ impl SettingsWindow {
                     )
                     .action_slot(
                         div().pr_1().pb_1().child(
-                            Button::new("fix-in-json", "Fix in settings.json")
+                            Button::localized("fix-in-json", "Fix in settings.json")
                                 .tab_index(0_isize)
                                 .style(ButtonStyle::Tinted(ui::TintColor::Warning))
                                 .on_click(cx.listener(|this, _, window, cx| {
@@ -3361,7 +3388,7 @@ impl SettingsWindow {
                         v_flex()
                             .my_0p5()
                             .gap_0p5()
-                            .child(Label::new("Restricted Mode"))
+                            .child(Label::localized("Restricted Mode"))
                             .child(
                                 Label::new(
                                     "This project is in restricted mode. Some project settings may not apply.",
@@ -3372,7 +3399,7 @@ impl SettingsWindow {
                     )
                     .action_slot(
                         div().pr_2().pb_1().child(
-                            Button::new("manage-trust", "Manage Trust")
+                            Button::localized("manage-trust", "Manage Trust")
                                 .style(ButtonStyle::Tinted(ui::TintColor::Warning))
                                 .on_click(cx.listener(move |_this, _, window, cx| {
                                     if let Some(original_window) = original_window {
@@ -3518,7 +3545,11 @@ impl SettingsWindow {
                             .clone()
                             .update(cx, |workspace, cx| {
                                 workspace
-                                    .with_local_workspace(window, cx, open_user_settings_in_workspace)
+                                    .with_local_workspace(
+                                        window,
+                                        cx,
+                                        open_user_settings_in_workspace,
+                                    )
                                     .detach();
                             });
                     })

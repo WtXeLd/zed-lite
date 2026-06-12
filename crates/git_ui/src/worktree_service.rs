@@ -162,14 +162,25 @@ impl Render for WorktreeFetchFailedToast {
                     .size(IconSize::Small)
                     .color(Color::Error),
             )
-            .child(Label::new(format!(
-                "git fetch failed for {}",
-                self.remote_branch_name
-            )))
+            .child(Label::new(match localization::current_language(cx) {
+                localization::UiLanguage::ChineseSimplified => {
+                    format!("git fetch 失败：{}", self.remote_branch_name)
+                }
+                localization::UiLanguage::English => {
+                    format!("git fetch failed for {}", self.remote_branch_name)
+                }
+            }))
             .child(
                 Button::new(
                     "use-local-worktree-base",
-                    format!("Use local {}", self.remote_branch_name),
+                    match localization::current_language(cx) {
+                        localization::UiLanguage::ChineseSimplified => {
+                            format!("使用本地 {}", self.remote_branch_name)
+                        }
+                        localization::UiLanguage::English => {
+                            format!("Use local {}", self.remote_branch_name)
+                        }
+                    },
                 )
                 .color(Color::Muted)
                 .on_click(cx.listener(move |_, _event, window, cx| {
@@ -195,7 +206,7 @@ impl Render for WorktreeFetchFailedToast {
                 })),
             )
             .child(
-                Button::new("view-worktree-fetch-log", "Show Error Logs")
+                Button::localized("view-worktree-fetch-log", "Show Error Logs")
                     .color(Color::Muted)
                     .on_click(cx.listener(move |_, _event, window, cx| {
                         cx.emit(DismissEvent);
@@ -1022,8 +1033,7 @@ async fn open_worktree_workspace(
         let path_list = util::path_list::PathList::new(&all_paths);
         let init: Option<
             Box<
-                dyn FnOnce(&mut Workspace, &mut gpui::Window, &mut gpui::Context<Workspace>)
-                    + Send,
+                dyn FnOnce(&mut Workspace, &mut gpui::Window, &mut gpui::Context<Workspace>) + Send,
             >,
         > = if transfer_state {
             let dock_structure = previous_state.dock_structure;
@@ -1216,7 +1226,7 @@ mod tests {
     use gpui::{App, Task, TestAppContext};
     use language::language_settings::AllLanguageSettings;
     use project::project_settings::ProjectSettings;
-    use project::task_store::{TaskSettingsLocation, TaskStore};
+    use project::task_store::TaskSettingsLocation;
     use project::{FakeFs, WorktreeSettings};
     use serde_json::json;
     use settings::{SettingsLocation, SettingsStore};
@@ -1424,7 +1434,7 @@ mod tests {
     async fn test_linked_worktree_inherits_trust_from_main_worktree(cx: &mut TestAppContext) {
         init_test(cx);
         cx.update(|cx| {
-            project::trusted_worktrees::init(collections::HashMap::default(), cx);
+            project::trusted_worktrees::init(collections::HashSet::default(), cx);
         });
 
         let fs = FakeFs::new(cx.background_executor.clone());

@@ -181,6 +181,10 @@ impl PickerDelegate for RepositorySelectorDelegate {
         "Select a repository...".into()
     }
 
+    fn localized_placeholder_text(&self) -> Option<&'static str> {
+        Some("Select a repository...")
+    }
+
     fn editor_position(&self) -> PickerEditorPosition {
         PickerEditorPosition::End
     }

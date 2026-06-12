@@ -73,6 +73,10 @@ impl PickerDelegate for FontPickerDelegate {
         "Search fonts…".into()
     }
 
+    fn localized_placeholder_text(&self) -> Option<&'static str> {
+        Some("Search fonts…")
+    }
+
     fn update_matches(
         &mut self,
         query: String,

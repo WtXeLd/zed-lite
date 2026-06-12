@@ -79,6 +79,7 @@ use crate::{
 pub struct Button {
     base: ButtonLike,
     label: SharedString,
+    localize_label: bool,
     label_color: Option<Color>,
     label_size: Option<LabelSize>,
     selected_label: Option<SharedString>,
@@ -103,6 +104,7 @@ impl Button {
         Self {
             base: ButtonLike::new(id),
             label: label.into(),
+            localize_label: false,
             label_color: None,
             label_size: None,
             selected_label: None,
@@ -115,6 +117,12 @@ impl Button {
             truncate: false,
             loading: false,
         }
+    }
+
+    pub fn localized(id: impl Into<ElementId>, label: &'static str) -> Self {
+        let mut this = Self::new(id, label);
+        this.localize_label = true;
+        this
     }
 
     /// Sets the color of the button's label.
@@ -377,6 +385,11 @@ impl RenderOnce for Button {
             .selected_label
             .filter(|_| is_selected)
             .unwrap_or(self.label);
+        let label = if self.localize_label {
+            localization::t_shared(cx, label)
+        } else {
+            label
+        };
 
         let label_color = if is_disabled {
             Color::Disabled

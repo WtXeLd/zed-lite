@@ -816,7 +816,7 @@ pub(crate) fn render_buffer_header(
                                             )
                                             .tooltip(move |_, cx| {
                                                 Tooltip::with_meta(
-                                                    "Open File",
+                                                    localization::t(cx, "Open File"),
                                                     None,
                                                     full_path.clone(),
                                                     cx,
@@ -876,7 +876,7 @@ pub(crate) fn render_buffer_header(
                                         this.visible_on_hover("buffer-header-group")
                                     })
                                     .child(
-                                        Button::new("open-file-button", "Open File")
+                                        Button::localized("open-file-button", "Open File")
                                             .style(ButtonStyle::OutlinedGhost)
                                             .when(is_selected, |this| {
                                                 this.key_binding(KeyBinding::for_action_in(
@@ -964,7 +964,7 @@ pub(crate) fn render_buffer_header(
                         .map(|entry| entry.id);
                     menu = menu
                         .when_some(abs_path, |menu, abs_path| {
-                            menu.entry(
+                            menu.entry_localized(
                                 "Copy Path",
                                 Some(Box::new(zed_actions::workspace::CopyPath)),
                                 window.handler_for(&editor, move |_, _, cx| {
@@ -975,7 +975,7 @@ pub(crate) fn render_buffer_header(
                             )
                         })
                         .when_some(relative_path, |menu, relative_path| {
-                            menu.entry(
+                            menu.entry_localized(
                                 "Copy Relative Path",
                                 Some(Box::new(zed_actions::workspace::CopyRelativePath)),
                                 window.handler_for(&editor, move |_, _, cx| {
@@ -990,7 +990,7 @@ pub(crate) fn render_buffer_header(
                             |menu| menu.separator(),
                         )
                         .when_some(reveal_in_project_panel, |menu, entry_id| {
-                            menu.entry(
+                            menu.entry_localized(
                                 "Reveal In Project Panel",
                                 Some(Box::new(RevealInProjectPanel::default())),
                                 window.handler_for(&editor, move |editor, _, cx| {
@@ -1003,7 +1003,7 @@ pub(crate) fn render_buffer_header(
                             )
                         })
                         .when_some(parent_abs_path, |menu, parent_abs_path| {
-                            menu.entry(
+                            menu.entry_localized(
                                 "Open in Terminal",
                                 Some(Box::new(OpenInTerminal)),
                                 window.handler_for(&editor, move |_, window, cx| {

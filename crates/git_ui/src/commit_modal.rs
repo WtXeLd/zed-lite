@@ -386,7 +386,7 @@ impl CommitModal {
             .with_handle(self.branch_list_handle.clone())
             .trigger_with_tooltip(
                 branch_picker_button,
-                Tooltip::for_action_title("Switch Branch", &zed_actions::git::Branch),
+                Tooltip::for_localized_action_title("Switch Branch", &zed_actions::git::Branch),
             )
             .anchor(Anchor::BottomLeft)
             .offset(gpui::Point {
@@ -409,16 +409,12 @@ impl CommitModal {
             .h(px(self.properties.footer_height))
             .gap_1()
             .child(
-                h_flex()
-                    .gap_1()
-                    .flex_shrink_1()
-                    .overflow_x_hidden()
-                    .child(
-                        h_flex()
-                            .flex_shrink_1()
-                            .overflow_x_hidden()
-                            .child(branch_picker),
-                    ),
+                h_flex().gap_1().flex_shrink_1().overflow_x_hidden().child(
+                    h_flex()
+                        .flex_shrink_1()
+                        .overflow_x_hidden()
+                        .child(branch_picker),
+                ),
             )
             .child(div().flex_1())
             .child(

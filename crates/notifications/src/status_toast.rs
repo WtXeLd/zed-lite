@@ -8,7 +8,7 @@ use zed_actions::toast;
 #[derive(RegisterComponent)]
 pub struct StatusToast {
     icon: Option<Icon>,
-    text: SharedString,
+    text: localization::LocalizableString,
     action: Option<ToastAction>,
     show_dismiss: bool,
     auto_dismiss: bool,
@@ -27,7 +27,30 @@ impl StatusToast {
 
             f(
                 Self {
-                    text: text.into(),
+                    text: localization::LocalizableString::User(text.into()),
+                    icon: None,
+                    action: None,
+                    show_dismiss: false,
+                    auto_dismiss: true,
+                    this_handle: cx.entity(),
+                    focus_handle,
+                },
+                cx,
+            )
+        })
+    }
+
+    pub fn localized(
+        text: &'static str,
+        cx: &mut App,
+        f: impl FnOnce(Self, &mut Context<Self>) -> Self,
+    ) -> Entity<Self> {
+        cx.new(|cx| {
+            let focus_handle = cx.focus_handle();
+
+            f(
+                Self {
+                    text: localization::ui(text),
                     icon: None,
                     action: None,
                     show_dismiss: false,
@@ -68,6 +91,26 @@ impl StatusToast {
         self
     }
 
+    pub fn localized_action(
+        mut self,
+        label: &'static str,
+        f: impl Fn(&mut Window, &mut App) + 'static,
+        cx: &mut App,
+    ) -> Self {
+        let this_handle = self.this_handle.clone();
+        let label = localization::t(cx, label);
+        self.action = Some(ToastAction::new(
+            label,
+            Some(Rc::new(move |window, cx| {
+                this_handle.update(cx, |_, cx| {
+                    cx.emit(DismissEvent);
+                });
+                f(window, cx);
+            })),
+        ));
+        self
+    }
+
     pub fn dismiss_button(mut self, show: bool) -> Self {
         self.show_dismiss = show;
         self
@@ -95,7 +138,7 @@ impl Render for StatusToast {
             .bg(cx.theme().colors().surface_background)
             .shadow_lg()
             .when_some(self.icon.clone(), |this, icon| this.child(icon))
-            .child(Label::new(self.text.clone()).color(Color::Default))
+            .child(Label::new(self.text.clone().resolve(cx)).color(Color::Default))
             .when_some(self.action.as_ref(), |this, action| {
                 this.child(
                     Button::new(action.id.clone(), action.label.clone())
@@ -116,7 +159,7 @@ impl Render for StatusToast {
                         .shape(ui::IconButtonShape::Square)
                         .icon_size(IconSize::Small)
                         .icon_color(Color::Muted)
-                        .tooltip(Tooltip::text("Dismiss"))
+                        .tooltip(Tooltip::localized_text("Dismiss"))
                         .on_click(move |_click_event, _window, cx| {
                             handle.update(cx, |_, cx| {
                                 cx.emit(DismissEvent);
@@ -157,16 +200,16 @@ impl Component for StatusToast {
     }
 
     fn preview(_window: &mut Window, cx: &mut App) -> AnyElement {
-        let text_example = StatusToast::new("Operation completed", cx, |this, _| this);
+        let text_example = StatusToast::localized("Operation completed", cx, |this, _| this);
 
-        let action_example = StatusToast::new("Update ready to install", cx, |this, _cx| {
-            this.action("Restart", |_, _| {})
+        let action_example = StatusToast::localized("Update ready to install", cx, |this, cx| {
+            this.localized_action("Restart", |_, _| {}, cx)
         });
 
         let dismiss_button_example =
-            StatusToast::new("Dismiss Button", cx, |this, _| this.dismiss_button(true));
+            StatusToast::localized("Dismiss Button", cx, |this, _| this.dismiss_button(true));
 
-        let icon_example = StatusToast::new(
+        let icon_example = StatusToast::localized(
             "Nathan Sobo accepted your contact request",
             cx,
             |this, _| {
@@ -178,13 +221,14 @@ impl Component for StatusToast {
             },
         );
 
-        let success_example = StatusToast::new("Pushed 4 changes to `zed/main`", cx, |this, _| {
-            this.icon(
-                Icon::new(IconName::Check)
-                    .size(IconSize::Small)
-                    .color(Color::Success),
-            )
-        });
+        let success_example =
+            StatusToast::localized("Pushed 4 changes to `zed/main`", cx, |this, _| {
+                this.icon(
+                    Icon::new(IconName::Check)
+                        .size(IconSize::Small)
+                        .color(Color::Success),
+                )
+            });
 
         let error_example = StatusToast::new(
             "git push: Couldn't find remote origin `iamnbutler/zed`",
@@ -195,29 +239,32 @@ impl Component for StatusToast {
                         .size(IconSize::Small)
                         .color(Color::Error),
                 )
-                .action("More Info", |_, _| {})
+                .localized_action("More Info", |_, _| {}, _cx)
             },
         );
 
-        let warning_example = StatusToast::new("You have outdated settings", cx, |this, _cx| {
-            this.icon(
-                Icon::new(IconName::Warning)
-                    .size(IconSize::Small)
-                    .color(Color::Warning),
-            )
-            .action("More Info", |_, _| {})
-        });
+        let warning_example =
+            StatusToast::localized("You have outdated settings", cx, |this, cx| {
+                this.icon(
+                    Icon::new(IconName::Warning)
+                        .size(IconSize::Small)
+                        .color(Color::Warning),
+                )
+                .localized_action("More Info", |_, _| {}, cx)
+            });
 
         let pr_example =
-            StatusToast::new("`zed/new-notification-system` created!", cx, |this, _cx| {
+            StatusToast::localized("`zed/new-notification-system` created!", cx, |this, cx| {
                 this.icon(
                     Icon::new(IconName::GitBranch)
                         .size(IconSize::Small)
                         .color(Color::Muted),
                 )
-                .action("Open Pull Request", |_, cx| {
-                    cx.open_url("https://github.com/")
-                })
+                .localized_action(
+                    "Open Pull Request",
+                    |_, cx| cx.open_url("https://github.com/"),
+                    cx,
+                )
             });
 
         v_flex()

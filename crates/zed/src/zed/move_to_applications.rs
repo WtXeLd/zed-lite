@@ -70,17 +70,28 @@ impl MoveToApplicationsRequest {
         workspace: WeakEntity<MultiWorkspace>,
         cx: &mut AsyncWindowContext,
     ) -> Result<()> {
+        let ui_language = cx.update(|_window, cx| localization::current_language(cx))?;
         let response = cx
             .prompt(
                 PromptLevel::Info,
-                "Move Zed to Applications?",
-                Some(
+                localization::translate(ui_language, "Move Zed to Applications?"),
+                Some(localization::translate(
+                    ui_language,
                     "Zed is running from a temporary location. Move it to Applications to finish installing it.",
-                ),
+                )),
                 &[
-                    PromptButton::ok("Yes"),
-                    PromptButton::cancel("No"),
-                    PromptButton::new("Don't ask me again"),
+                    PromptButton::localized(
+                        "Yes",
+                        localization::translate(ui_language, "Yes"),
+                    ),
+                    PromptButton::localized(
+                        "No",
+                        localization::translate(ui_language, "No"),
+                    ),
+                    PromptButton::localized(
+                        "Don't ask me again",
+                        localization::translate(ui_language, "Don't ask me again"),
+                    ),
                 ],
             )
             .await?;
@@ -101,11 +112,16 @@ impl MoveToApplicationsRequest {
                             }
                         })
                         .ok();
+                    let ui_language =
+                        cx.update(|_window, cx| localization::current_language(cx))?;
                     cx.prompt(
                         PromptLevel::Critical,
-                        "Failed to move Zed to Applications",
+                        localization::translate(ui_language, "Failed to move Zed to Applications"),
                         Some(&error.to_string()),
-                        &["Ok"],
+                        &[PromptButton::localized(
+                            "Ok",
+                            localization::translate(ui_language, "Ok"),
+                        )],
                     )
                     .await
                     .log_err();
@@ -178,7 +194,7 @@ impl Render for InstallingZedModal {
                     .py_3()
                     .border_b_1()
                     .border_color(theme.colors().border_variant)
-                    .child(Label::new("Installing Zed…")),
+                    .child(Label::localized("Installing Zed…")),
             )
             .child(
                 h_flex()
@@ -196,9 +212,9 @@ impl Render for InstallingZedModal {
                     .child(
                         v_flex()
                             .gap_1()
-                            .child(Label::new("Moving Zed to Applications"))
+                            .child(Label::localized("Moving Zed to Applications"))
                             .child(
-                                Label::new("Zed will reopen when installation is complete.")
+                                Label::localized("Zed will reopen when installation is complete.")
                                     .size(LabelSize::Small)
                                     .color(Color::Muted),
                             ),

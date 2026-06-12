@@ -386,7 +386,6 @@ impl Editor {
             .shared(),
         );
     }
-
 }
 
 pub trait CodeActionProvider {

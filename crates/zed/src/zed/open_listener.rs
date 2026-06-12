@@ -197,7 +197,6 @@ impl OpenRequest {
 
         Ok(())
     }
-
 }
 
 #[derive(Clone)]

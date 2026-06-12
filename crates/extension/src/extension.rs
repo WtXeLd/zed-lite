@@ -137,7 +137,6 @@ pub trait Extension: Send + Sync + 'static {
         package_name: Arc<str>,
         kv_store: Arc<dyn KeyValueStoreDelegate>,
     ) -> Result<()>;
-
 }
 
 pub fn parse_wasm_extension_version(extension_id: &str, wasm_bytes: &[u8]) -> Result<Version> {

@@ -153,6 +153,10 @@ impl PickerDelegate for SettingsProfileSelectorDelegate {
         "Select a settings profile...".into()
     }
 
+    fn localized_placeholder_text(&self) -> Option<&'static str> {
+        Some("Select a settings profile...")
+    }
+
     fn match_count(&self) -> usize {
         self.matches.len()
     }

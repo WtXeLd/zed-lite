@@ -143,6 +143,10 @@ impl PickerDelegate for CommitTagPickerDelegate {
         "Copy Tag".into()
     }
 
+    fn localized_placeholder_text(&self) -> Option<&'static str> {
+        Some("Copy Tag")
+    }
+
     fn match_count(&self) -> usize {
         self.tag_names.len()
     }
@@ -299,7 +303,9 @@ impl ChangedFileEntry {
                 } else {
                     format!("{}/{}", dir_path, file_name).into()
                 };
-                move |_, cx| Tooltip::with_meta("View Changes", None, meta.clone(), cx)
+                move |_, cx| {
+                    Tooltip::with_meta(localization::t(cx, "View Changes"), None, meta.clone(), cx)
+                }
             })
             .on_click({
                 let entry = self.clone();
@@ -398,7 +404,9 @@ impl ChangedFileDirectoryEntry {
             )
             .tooltip({
                 let name = self.name.clone();
-                move |_, cx| Tooltip::with_meta("Toggle Folder", None, name.clone(), cx)
+                move |_, cx| {
+                    Tooltip::with_meta(localization::t(cx, "Toggle Folder"), None, name.clone(), cx)
+                }
             })
             .on_click(move |_, _, cx| {
                 git_graph
@@ -1466,7 +1474,7 @@ impl GitGraph {
 
         let search_editor = cx.new(|cx| {
             let mut editor = Editor::single_line(window, cx);
-            editor.set_placeholder_text("Search commits…", window, cx);
+            editor.set_localized_placeholder_text("Search commits…", window, cx);
             editor
         });
 
@@ -2404,10 +2412,14 @@ impl GitGraph {
 
         let focus_handle = self.focus_handle.clone();
         let git_graph = cx.entity();
+        let menu_header = match localization::current_language(cx) {
+            localization::UiLanguage::ChineseSimplified => format!("提交 {sha_short}"),
+            localization::UiLanguage::English => format!("Commit {sha_short}"),
+        };
         let context_menu = ContextMenu::build(window, cx, |context_menu, window, _| {
             context_menu
                 .context(focus_handle)
-                .header(format!("Commit {sha_short}"))
+                .header(menu_header)
                 .entry(
                     "View Commit",
                     Some(OpenCommitView.boxed_clone()),
@@ -2467,11 +2479,11 @@ impl GitGraph {
                     }
                 })
                 .map(|mut menu| {
-                    menu = menu.separator().header("Custom Commands");
+                    menu = menu.separator().header_localized("Custom Commands");
 
                     if git_tasks.is_empty() {
                         return menu.item(
-                            ContextMenuEntry::new("Learn More")
+                            ContextMenuEntry::localized("Learn More")
                                 .icon(IconName::ArrowUpRight)
                                 .icon_color(Color::Muted)
                                 .icon_position(IconPosition::End)
@@ -2979,23 +2991,28 @@ impl GitGraph {
                                     .host
                                     .build_commit_permalink(&parsed_remote, params)
                                     .to_string();
+                                let label = match localization::current_language(cx) {
+                                    localization::UiLanguage::ChineseSimplified => {
+                                        format!("在 {} 上查看", provider_name)
+                                    }
+                                    localization::UiLanguage::English => {
+                                        format!("View on {}", provider_name)
+                                    }
+                                };
 
                                 this.child(
-                                    Button::new(
-                                        "view-on-provider",
-                                        format!("View on {}", provider_name),
-                                    )
-                                    .start_icon(
-                                        Icon::new(icon).size(IconSize::Small).color(Color::Muted),
-                                    )
-                                    .label_size(LabelSize::Small)
-                                    .truncate(true)
-                                    .color(Color::Muted)
-                                    .on_click(
-                                        move |_, _, cx| {
+                                    Button::new("view-on-provider", label)
+                                        .start_icon(
+                                            Icon::new(icon)
+                                                .size(IconSize::Small)
+                                                .color(Color::Muted),
+                                        )
+                                        .label_size(LabelSize::Small)
+                                        .truncate(true)
+                                        .color(Color::Muted)
+                                        .on_click(move |_, _, cx| {
                                             cx.open_url(&url);
-                                        },
-                                    ),
+                                        }),
                                 )
                             }),
                     ),
@@ -3139,7 +3156,7 @@ impl GitGraph {
             .child(Divider::horizontal())
             .child(
                 h_flex().p_1p5().w_full().child(
-                    Button::new("view-commit", "View Commit")
+                    Button::localized("view-commit", "View Commit")
                         .full_width()
                         .style(ButtonStyle::OutlinedGhost)
                         .on_click(cx.listener(|this, _, window, cx| {
@@ -3634,11 +3651,16 @@ impl Render for GitGraph {
 
         let content = if commit_count == 0 {
             let message = if let Some(error) = &error {
-                format!("Error loading: {}", error)
+                match localization::current_language(cx) {
+                    localization::UiLanguage::ChineseSimplified => {
+                        format!("加载出错：{}", error)
+                    }
+                    localization::UiLanguage::English => format!("Error loading: {}", error),
+                }
             } else if is_loading {
-                "Loading".to_string()
+                localization::t(cx, "Loading").to_string()
             } else {
-                "No commits found".to_string()
+                localization::t(cx, "No commits found").to_string()
             };
             let label = Label::new(message)
                 .color(Color::Muted)
@@ -3685,28 +3707,40 @@ impl Render for GitGraph {
                             if !is_path_history {
                                 TableRow::from_vec(
                                     vec![
-                                        Label::new("Graph")
+                                        Label::localized("Graph")
                                             .color(Color::Muted)
                                             .truncate()
                                             .into_any_element(),
-                                        Label::new("Description")
+                                        Label::localized("Description")
                                             .color(Color::Muted)
                                             .into_any_element(),
-                                        Label::new("Date").color(Color::Muted).into_any_element(),
-                                        Label::new("Author").color(Color::Muted).into_any_element(),
-                                        Label::new("Commit").color(Color::Muted).into_any_element(),
+                                        Label::localized("Date")
+                                            .color(Color::Muted)
+                                            .into_any_element(),
+                                        Label::localized("Author")
+                                            .color(Color::Muted)
+                                            .into_any_element(),
+                                        Label::localized("Commit")
+                                            .color(Color::Muted)
+                                            .into_any_element(),
                                     ],
                                     5,
                                 )
                             } else {
                                 TableRow::from_vec(
                                     vec![
-                                        Label::new("Description")
+                                        Label::localized("Description")
                                             .color(Color::Muted)
                                             .into_any_element(),
-                                        Label::new("Date").color(Color::Muted).into_any_element(),
-                                        Label::new("Author").color(Color::Muted).into_any_element(),
-                                        Label::new("Commit").color(Color::Muted).into_any_element(),
+                                        Label::localized("Date")
+                                            .color(Color::Muted)
+                                            .into_any_element(),
+                                        Label::localized("Author")
+                                            .color(Color::Muted)
+                                            .into_any_element(),
+                                        Label::localized("Commit")
+                                            .color(Color::Muted)
+                                            .into_any_element(),
                                     ],
                                     4,
                                 )

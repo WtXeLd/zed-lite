@@ -20,8 +20,7 @@ use db::{
 };
 use gpui::{Axis, Bounds, Task, WindowBounds, WindowId, point, size};
 use project::{
-    ProjectGroupKey, bookmark_store::SerializedBookmark,
-    trusted_worktrees::DbTrustedPaths,
+    ProjectGroupKey, bookmark_store::SerializedBookmark, trusted_worktrees::DbTrustedPaths,
 };
 
 use language::{LanguageName, Toolchain, ToolchainScope};
@@ -429,124 +428,121 @@ pub struct WorkspaceDb(ThreadSafeConnection);
 impl Domain for WorkspaceDb {
     const NAME: &str = stringify!(WorkspaceDb);
 
-    const MIGRATIONS: &[&str] = &[
-        sql!(
-            CREATE TABLE workspaces(
-                workspace_id INTEGER PRIMARY KEY,
-                paths TEXT,
-                paths_order TEXT,
-                timestamp TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL,
-                window_state TEXT,
-                window_x REAL,
-                window_y REAL,
-                window_width REAL,
-                window_height REAL,
-                display BLOB,
-                left_dock_visible INTEGER,
-                left_dock_active_panel TEXT,
-                right_dock_visible INTEGER,
-                right_dock_active_panel TEXT,
-                bottom_dock_visible INTEGER,
-                bottom_dock_active_panel TEXT,
-                left_dock_zoom INTEGER,
-                right_dock_zoom INTEGER,
-                bottom_dock_zoom INTEGER,
-                fullscreen INTEGER,
-                centered_layout INTEGER,
-                session_id TEXT,
-                window_id INTEGER,
-                identity_paths TEXT,
-                identity_paths_order TEXT
-            ) STRICT;
+    const MIGRATIONS: &[&str] = &[sql!(
+        CREATE TABLE workspaces(
+            workspace_id INTEGER PRIMARY KEY,
+            paths TEXT,
+            paths_order TEXT,
+            timestamp TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL,
+            window_state TEXT,
+            window_x REAL,
+            window_y REAL,
+            window_width REAL,
+            window_height REAL,
+            display BLOB,
+            left_dock_visible INTEGER,
+            left_dock_active_panel TEXT,
+            right_dock_visible INTEGER,
+            right_dock_active_panel TEXT,
+            bottom_dock_visible INTEGER,
+            bottom_dock_active_panel TEXT,
+            left_dock_zoom INTEGER,
+            right_dock_zoom INTEGER,
+            bottom_dock_zoom INTEGER,
+            fullscreen INTEGER,
+            centered_layout INTEGER,
+            session_id TEXT,
+            window_id INTEGER,
+            identity_paths TEXT,
+            identity_paths_order TEXT
+        ) STRICT;
 
-            CREATE UNIQUE INDEX ix_workspaces_location ON workspaces(paths);
+        CREATE UNIQUE INDEX ix_workspaces_location ON workspaces(paths);
 
-            CREATE TABLE pane_groups(
-                group_id INTEGER PRIMARY KEY,
-                workspace_id INTEGER NOT NULL,
-                parent_group_id INTEGER,
-                position INTEGER,
-                axis TEXT NOT NULL,
-                flexes TEXT,
-                FOREIGN KEY(workspace_id) REFERENCES workspaces(workspace_id)
-                ON DELETE CASCADE
-                ON UPDATE CASCADE,
-                FOREIGN KEY(parent_group_id) REFERENCES pane_groups(group_id) ON DELETE CASCADE
-            ) STRICT;
+        CREATE TABLE pane_groups(
+            group_id INTEGER PRIMARY KEY,
+            workspace_id INTEGER NOT NULL,
+            parent_group_id INTEGER,
+            position INTEGER,
+            axis TEXT NOT NULL,
+            flexes TEXT,
+            FOREIGN KEY(workspace_id) REFERENCES workspaces(workspace_id)
+            ON DELETE CASCADE
+            ON UPDATE CASCADE,
+            FOREIGN KEY(parent_group_id) REFERENCES pane_groups(group_id) ON DELETE CASCADE
+        ) STRICT;
 
-            CREATE TABLE panes(
-                pane_id INTEGER PRIMARY KEY,
-                workspace_id INTEGER NOT NULL,
-                active INTEGER NOT NULL,
-                pinned_count INTEGER DEFAULT 0,
-                FOREIGN KEY(workspace_id) REFERENCES workspaces(workspace_id)
-                ON DELETE CASCADE
-                ON UPDATE CASCADE
-            ) STRICT;
+        CREATE TABLE panes(
+            pane_id INTEGER PRIMARY KEY,
+            workspace_id INTEGER NOT NULL,
+            active INTEGER NOT NULL,
+            pinned_count INTEGER DEFAULT 0,
+            FOREIGN KEY(workspace_id) REFERENCES workspaces(workspace_id)
+            ON DELETE CASCADE
+            ON UPDATE CASCADE
+        ) STRICT;
 
-            CREATE TABLE center_panes(
-                pane_id INTEGER PRIMARY KEY,
-                parent_group_id INTEGER,
-                position INTEGER,
-                FOREIGN KEY(pane_id) REFERENCES panes(pane_id)
-                ON DELETE CASCADE,
-                FOREIGN KEY(parent_group_id) REFERENCES pane_groups(group_id) ON DELETE CASCADE
-            ) STRICT;
+        CREATE TABLE center_panes(
+            pane_id INTEGER PRIMARY KEY,
+            parent_group_id INTEGER,
+            position INTEGER,
+            FOREIGN KEY(pane_id) REFERENCES panes(pane_id)
+            ON DELETE CASCADE,
+            FOREIGN KEY(parent_group_id) REFERENCES pane_groups(group_id) ON DELETE CASCADE
+        ) STRICT;
 
-            CREATE TABLE items(
-                item_id INTEGER NOT NULL,
-                workspace_id INTEGER NOT NULL,
-                pane_id INTEGER NOT NULL,
-                kind TEXT NOT NULL,
-                position INTEGER NOT NULL,
-                active INTEGER NOT NULL,
-                preview INTEGER,
-                FOREIGN KEY(workspace_id) REFERENCES workspaces(workspace_id)
-                ON DELETE CASCADE
-                ON UPDATE CASCADE,
-                FOREIGN KEY(pane_id) REFERENCES panes(pane_id)
-                ON DELETE CASCADE,
-                PRIMARY KEY(item_id, workspace_id)
-            ) STRICT;
+        CREATE TABLE items(
+            item_id INTEGER NOT NULL,
+            workspace_id INTEGER NOT NULL,
+            pane_id INTEGER NOT NULL,
+            kind TEXT NOT NULL,
+            position INTEGER NOT NULL,
+            active INTEGER NOT NULL,
+            preview INTEGER,
+            FOREIGN KEY(workspace_id) REFERENCES workspaces(workspace_id)
+            ON DELETE CASCADE
+            ON UPDATE CASCADE,
+            FOREIGN KEY(pane_id) REFERENCES panes(pane_id)
+            ON DELETE CASCADE,
+            PRIMARY KEY(item_id, workspace_id)
+        ) STRICT;
 
-            CREATE TABLE toolchains(
-                workspace_id INTEGER,
-                worktree_root_path TEXT NOT NULL,
-                language_name TEXT NOT NULL,
-                name TEXT NOT NULL,
-                path TEXT NOT NULL,
-                raw_json TEXT NOT NULL,
-                relative_worktree_path TEXT NOT NULL,
-                PRIMARY KEY (workspace_id, worktree_root_path, language_name, relative_worktree_path)
-            ) STRICT;
+        CREATE TABLE toolchains(
+            workspace_id INTEGER,
+            worktree_root_path TEXT NOT NULL,
+            language_name TEXT NOT NULL,
+            name TEXT NOT NULL,
+            path TEXT NOT NULL,
+            raw_json TEXT NOT NULL,
+            relative_worktree_path TEXT NOT NULL,
+            PRIMARY KEY (workspace_id, worktree_root_path, language_name, relative_worktree_path)
+        ) STRICT;
 
-            CREATE TABLE user_toolchains(
-                workspace_id INTEGER NOT NULL,
-                worktree_root_path TEXT NOT NULL,
-                relative_worktree_path TEXT NOT NULL,
-                language_name TEXT NOT NULL,
-                name TEXT NOT NULL,
-                path TEXT NOT NULL,
-                raw_json TEXT NOT NULL,
-                PRIMARY KEY (workspace_id, worktree_root_path, relative_worktree_path, language_name, name, path, raw_json)
-            ) STRICT;
+        CREATE TABLE user_toolchains(
+            workspace_id INTEGER NOT NULL,
+            worktree_root_path TEXT NOT NULL,
+            relative_worktree_path TEXT NOT NULL,
+            language_name TEXT NOT NULL,
+            name TEXT NOT NULL,
+            path TEXT NOT NULL,
+            raw_json TEXT NOT NULL,
+            PRIMARY KEY (workspace_id, worktree_root_path, relative_worktree_path, language_name, name, path, raw_json)
+        ) STRICT;
 
-            CREATE TABLE trusted_worktrees(
-                trust_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                absolute_path TEXT NOT NULL
-            ) STRICT;
+        CREATE TABLE trusted_worktrees(
+            trust_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            absolute_path TEXT NOT NULL
+        ) STRICT;
 
-            CREATE TABLE bookmarks(
-                workspace_id INTEGER NOT NULL,
-                path TEXT NOT NULL,
-                row INTEGER NOT NULL,
-                FOREIGN KEY(workspace_id) REFERENCES workspaces(workspace_id)
-                ON DELETE CASCADE
-                ON UPDATE CASCADE
-            );
-        ),
-
-    ];
+        CREATE TABLE bookmarks(
+            workspace_id INTEGER NOT NULL,
+            path TEXT NOT NULL,
+            row INTEGER NOT NULL,
+            FOREIGN KEY(workspace_id) REFERENCES workspaces(workspace_id)
+            ON DELETE CASCADE
+            ON UPDATE CASCADE
+        );
+    )];
 
     fn should_allow_migration_change(_index: usize, old: &str, new: &str) -> bool {
         old == new
@@ -627,9 +623,7 @@ impl WorkspaceDb {
                     paths IS ?
                 LIMIT 1
             })
-            .and_then(|mut prepared_statement| {
-                (prepared_statement)(root_paths.serialize().paths)
-            })
+            .and_then(|mut prepared_statement| (prepared_statement)(root_paths.serialize().paths))
             .context("No workspaces found")
             .warn_on_err()
             .flatten()?;
@@ -1046,25 +1040,17 @@ impl WorkspaceDb {
     fn session_workspaces(
         &self,
         session_id: String,
-    ) -> Result<
-        Vec<(
-            WorkspaceId,
-            PathList,
-            Option<u64>,
-        )>,
-    > {
+    ) -> Result<Vec<(WorkspaceId, PathList, Option<u64>)>> {
         Ok(self
             .session_workspaces_query(session_id)?
             .into_iter()
-            .map(
-                |(workspace_id, paths, order, window_id)| {
-                    (
-                        WorkspaceId(workspace_id),
-                        PathList::deserialize(&SerializedPathList { paths, order }),
-                        window_id,
-                    )
-                },
-            )
+            .map(|(workspace_id, paths, order, window_id)| {
+                (
+                    WorkspaceId(workspace_id),
+                    PathList::deserialize(&SerializedPathList { paths, order }),
+                    window_id,
+                )
+            })
             .collect())
     }
 
@@ -1222,7 +1208,8 @@ impl WorkspaceDb {
     ) -> Result<Vec<SessionWorkspace>> {
         let mut workspaces = Vec::new();
 
-        for (workspace_id, paths, window_id) in self.session_workspaces(last_session_id.to_owned())?
+        for (workspace_id, paths, window_id) in
+            self.session_workspaces(last_session_id.to_owned())?
         {
             let window_id = window_id.map(WindowId::from);
 

@@ -9,6 +9,7 @@ use language::{
     BinaryStatus, LanguageRegistry, LanguageServerId, LanguageServerName,
     LanguageServerStatusUpdate, ServerHealth,
 };
+use localization::UiLanguage;
 use project::{
     LanguageServerProgress, LspStoreEvent, ProgressToken, Project, ProjectEnvironmentEvent,
     git_store::{GitStoreEvent, Repository},
@@ -236,11 +237,15 @@ impl ActivityIndicator {
                 cx.spawn_in(window, async move |workspace, cx| {
                     let buffer = create_buffer.await?;
                     buffer.update(cx, |buffer, cx| {
-                        buffer.edit(
-                            [(0..0, format!("Language server {server_name}:\n\n{status}"))],
-                            None,
-                            cx,
-                        );
+                        let text = match localization::current_language(cx) {
+                            UiLanguage::ChineseSimplified => {
+                                format!("语言服务器 {server_name}：\n\n{status}")
+                            }
+                            UiLanguage::English => {
+                                format!("Language server {server_name}:\n\n{status}")
+                            }
+                        };
+                        buffer.edit([(0..0, text)], None, cx);
                         buffer.set_capability(language::Capability::ReadOnly, cx);
                     });
                     workspace.update_in(cx, |workspace, window, cx| {
@@ -537,9 +542,17 @@ impl ActivityIndicator {
 
         // Show any formatting failure
         if let Some(failure) = self.project.read(cx).last_formatting_failure(cx) {
+            let message = match localization::current_language(cx) {
+                UiLanguage::ChineseSimplified => {
+                    format!("格式化失败：{failure}。点击查看日志。")
+                }
+                UiLanguage::English => {
+                    format!("Formatting failed: {failure}. Click to see logs.")
+                }
+            };
             return Some(Content {
                 icon: ActivityIcon::Icon(IconName::Warning),
-                message: format!("Formatting failed: {failure}. Click to see logs."),
+                message,
                 on_click: Some(Arc::new(|indicator, window, cx| {
                     indicator.project.update(cx, |project, cx| {
                         project.reset_last_formatting_failure(cx);
@@ -604,15 +617,30 @@ impl ActivityIndicator {
         {
             let (message, icon) = match operation {
                 ExtensionOperation::Install => (
-                    format!("Installing {extension_id} extension…"),
+                    match localization::current_language(cx) {
+                        UiLanguage::ChineseSimplified => {
+                            format!("正在安装 {extension_id} 扩展…")
+                        }
+                        UiLanguage::English => format!("Installing {extension_id} extension…"),
+                    },
                     ActivityIcon::LoadingSpinner,
                 ),
                 ExtensionOperation::Upgrade => (
-                    format!("Updating {extension_id} extension…"),
+                    match localization::current_language(cx) {
+                        UiLanguage::ChineseSimplified => {
+                            format!("正在更新 {extension_id} 扩展…")
+                        }
+                        UiLanguage::English => format!("Updating {extension_id} extension…"),
+                    },
                     ActivityIcon::Icon(IconName::Download),
                 ),
                 ExtensionOperation::Remove => (
-                    format!("Removing {extension_id} extension…"),
+                    match localization::current_language(cx) {
+                        UiLanguage::ChineseSimplified => {
+                            format!("正在移除 {extension_id} 扩展…")
+                        }
+                        UiLanguage::English => format!("Removing {extension_id} extension…"),
+                    },
                     ActivityIcon::LoadingSpinner,
                 ),
             };
@@ -702,7 +730,14 @@ impl Render for ActivityIndicator {
                                     has_cancellable_work = true;
                                     let language_server_id = work.language_server_id;
                                     let token = work.progress_token.clone();
-                                    let title = SharedString::from(format!("Cancel {title}"));
+                                    let title = SharedString::from(
+                                        match localization::current_language(cx) {
+                                            UiLanguage::ChineseSimplified => {
+                                                format!("取消 {title}")
+                                            }
+                                            UiLanguage::English => format!("Cancel {title}"),
+                                        },
+                                    );
                                     menu = menu.custom_entry(
                                         move |_, _| {
                                             h_flex()

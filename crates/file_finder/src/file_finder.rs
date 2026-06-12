@@ -46,8 +46,8 @@ use util::{
     rel_path::RelPath,
 };
 use workspace::{
-    item::PreviewTabsSettings, notifications::NotifyResultExt, pane, ModalView, OpenOptions,
-    OpenVisible, SplitDirection, Workspace,
+    ModalView, OpenOptions, OpenVisible, SplitDirection, Workspace, item::PreviewTabsSettings,
+    notifications::NotifyResultExt, pane,
 };
 use zed_actions::search::ToggleIncludeIgnored;
 
@@ -1579,6 +1579,10 @@ impl PickerDelegate for FileFinderDelegate {
         "Search project files...".into()
     }
 
+    fn localized_placeholder_text(&self) -> Option<&'static str> {
+        Some("Search project files...")
+    }
+
     fn match_count(&self) -> usize {
         self.matches.len()
     }
@@ -1803,7 +1807,7 @@ impl PickerDelegate for FileFinderDelegate {
                 this.child(
                     h_flex()
                         .id("project-scan-indicator")
-                        .tooltip(Tooltip::text("Project Scan in Progress…"))
+                        .tooltip(Tooltip::localized_text("Project Scan in Progress…"))
                         .child(
                             Icon::new(IconName::LoadCircle)
                                 .color(Color::Accent)
@@ -1862,7 +1866,7 @@ impl PickerDelegate for FileFinderDelegate {
                                     let focus_handle = focus_handle.clone();
                                     move |menu, _, _| {
                                         menu.context(focus_handle.clone())
-                                            .header("Filter Options")
+                                            .header_localized("Filter Options")
                                             .toggleable_entry(
                                                 "Include Ignored Files",
                                                 include_ignored.unwrap_or(false),
@@ -1895,7 +1899,7 @@ impl PickerDelegate for FileFinderDelegate {
                                 })
                                 .trigger(
                                     ButtonLike::new("split-trigger")
-                                        .child(Label::new("Split…"))
+                                        .child(Label::localized("Split…"))
                                         .selected_style(ButtonStyle::Tinted(TintColor::Accent))
                                         .child(
                                             KeyBinding::for_action_in(
@@ -1936,7 +1940,7 @@ impl PickerDelegate for FileFinderDelegate {
                                 }),
                         )
                         .child(
-                            Button::new("open-without-dismiss", "Keep Open")
+                            Button::localized("open-without-dismiss", "Keep Open")
                                 .key_binding(
                                     KeyBinding::for_action_in(
                                         &OpenWithoutDismiss,
@@ -1950,7 +1954,7 @@ impl PickerDelegate for FileFinderDelegate {
                                 }),
                         )
                         .child(
-                            Button::new("open-selection", "Open")
+                            Button::localized("open-selection", "Open")
                                 .key_binding(
                                     KeyBinding::for_action_in(&menu::Confirm, &focus_handle, cx)
                                         .map(|kb| kb.size(rems_from_px(12.))),

@@ -28,9 +28,7 @@ use settings::Settings as _;
 use title_bar_settings::TitleBarSettings;
 use ui::{PopoverMenu, TintColor, Tooltip, prelude::*, utils::platform_title_bar_height};
 use util::ResultExt;
-use workspace::{
-    MultiWorkspace, ToggleWorktreeSecurity, Workspace,
-};
+use workspace::{MultiWorkspace, ToggleWorktreeSecurity, Workspace};
 
 const MAX_PROJECT_NAME_LENGTH: usize = 40;
 const MAX_BRANCH_NAME_LENGTH: usize = 40;
@@ -406,7 +404,7 @@ impl TitleBar {
             return None;
         }
 
-        let button = Button::new("restricted_mode_trigger", "Restricted Mode")
+        let button = Button::localized("restricted_mode_trigger", "Restricted Mode")
             .style(ButtonStyle::Tinted(TintColor::Warning))
             .label_size(LabelSize::Small)
             .color(Color::Warning)
@@ -444,7 +442,7 @@ impl TitleBar {
     pub fn render_project_host(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         if self.project.read(cx).is_disconnected(cx) {
             return Some(
-                Button::new("disconnected", "Disconnected")
+                Button::localized("disconnected", "Disconnected")
                     .disabled(true)
                     .color(Color::Disabled)
                     .label_size(LabelSize::Small)
@@ -712,7 +710,7 @@ impl TitleBar {
                 };
 
                 let trigger = if is_detached_head {
-                    Button::new("project_branch_trigger", "Create Branch")
+                    Button::localized("project_branch_trigger", "Create Branch")
                         .selected_style(ButtonStyle::Tinted(TintColor::Accent))
                         .label_size(LabelSize::Small)
                         .start_icon(

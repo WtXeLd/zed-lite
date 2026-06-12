@@ -11,12 +11,10 @@ use crate::{
     SettingsPage, SettingsPageItem, SubPageLink, USER, active_language, all_language_names,
 };
 
-
 const DEFAULT_STRING: String = String::new();
 /// A default empty string reference. Useful in `pick` functions for cases either in dynamic item fields, or when dealing with `settings::Maybe`
 /// to avoid the "NO DEFAULT" case.
 const DEFAULT_EMPTY_STRING: Option<&String> = Some(&DEFAULT_STRING);
-
 
 macro_rules! concat_sections {
     (@vec, $($arr:expr),+ $(,)?) => {{
@@ -125,6 +123,22 @@ fn general_page(cx: &App) -> SettingsPage {
     fn general_settings_section(_cx: &App) -> Vec<SettingsPageItem> {
         vec![
             SettingsPageItem::SectionHeader("General Settings"),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: "UI Language",
+                description: "The language used for Zed Lite's UI and application menus.",
+                field: Box::new(SettingField {
+                    json_path: Some("ui_language"),
+                    pick: |settings_content| settings_content.ui_language.as_ref(),
+                    write: |settings_content, value, _| {
+                        settings_content.ui_language = value;
+                    },
+                }),
+                metadata: Some(Box::new(SettingsFieldMetadata {
+                    should_do_titlecase: Some(false),
+                    ..Default::default()
+                })),
+                files: USER,
+            }),
             SettingsPageItem::SettingItem(SettingItem {
                 title: "When Closing With No Tabs",
                 description: "What to do when using the 'close active item' action with no tabs.",
@@ -2961,7 +2975,6 @@ fn languages_and_tools_page(cx: &App) -> SettingsPage {
                             non_editor_language_settings_data(),
                         );
 
-
                         let items = items.into_boxed_slice();
                         this.render_sub_page_items(
                             items.iter().enumerate(),
@@ -5518,7 +5531,6 @@ fn panels_page() -> SettingsPage {
         outline_panel_section(),
         git_panel_section(),
     );
-
 
     SettingsPage {
         title: "Panels",

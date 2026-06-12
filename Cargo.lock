@@ -102,6 +102,7 @@ dependencies = [
  "futures 0.3.32",
  "gpui",
  "language",
+ "localization",
  "project",
  "proto",
  "smallvec",
@@ -2405,6 +2406,7 @@ dependencies = [
  "editor",
  "feature_flags",
  "gpui",
+ "localization",
  "log",
  "text",
  "ui",
@@ -2671,6 +2673,7 @@ dependencies = [
  "indoc",
  "itertools 0.14.0",
  "language",
+ "localization",
  "log",
  "lsp",
  "markdown",
@@ -2945,6 +2948,7 @@ dependencies = [
  "language",
  "languages",
  "linkify",
+ "localization",
  "log",
  "lsp",
  "markdown",
@@ -4151,6 +4155,7 @@ dependencies = [
  "itertools 0.14.0",
  "language",
  "linkify",
+ "localization",
  "log",
  "markdown",
  "menu",
@@ -5989,6 +5994,7 @@ dependencies = [
  "gpui",
  "itertools 0.14.0",
  "language",
+ "localization",
  "lsp",
  "menu",
  "project",
@@ -6247,6 +6253,14 @@ name = "litrs"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "11d3d7f243d5c5a8b9bb5d6dd2b1602c0cb0b9db1621bafc7ed66e35ff9fe092"
+
+[[package]]
+name = "localization"
+version = "0.1.0"
+dependencies = [
+ "gpui",
+ "settings",
+]
 
 [[package]]
 name = "lock_api"
@@ -7093,6 +7107,7 @@ version = "0.1.0"
 dependencies = [
  "component",
  "gpui",
+ "localization",
  "ui",
  "workspace",
  "zed_actions",
@@ -8574,6 +8589,7 @@ dependencies = [
  "anyhow",
  "editor",
  "gpui",
+ "localization",
  "menu",
  "schemars",
  "serde",
@@ -9063,6 +9079,7 @@ dependencies = [
  "gpui",
  "itertools 0.14.0",
  "language",
+ "localization",
  "menu",
  "notifications",
  "pretty_assertions",
@@ -10293,6 +10310,7 @@ dependencies = [
  "gpui",
  "itertools 0.14.0",
  "language",
+ "localization",
  "lsp",
  "menu",
  "multi_buffer",
@@ -10652,6 +10670,7 @@ dependencies = [
  "heck 0.5.0",
  "itertools 0.14.0",
  "language",
+ "localization",
  "log",
  "menu",
  "paths",
@@ -11261,6 +11280,7 @@ dependencies = [
  "file_icons",
  "gpui",
  "language",
+ "localization",
  "multi_buffer",
  "ui",
  "workspace",
@@ -11675,6 +11695,7 @@ dependencies = [
  "gpui",
  "itertools 0.14.0",
  "language",
+ "localization",
  "log",
  "menu",
  "pretty_assertions",
@@ -12176,6 +12197,7 @@ dependencies = [
  "fuzzy",
  "gpui",
  "language",
+ "localization",
  "menu",
  "open_path_prompt",
  "picker",
@@ -12632,6 +12654,7 @@ dependencies = [
  "gpui_util",
  "icons",
  "itertools 0.14.0",
+ "localization",
  "log",
  "menu",
  "num-format",
@@ -12650,6 +12673,7 @@ version = "0.1.0"
 dependencies = [
  "component",
  "gpui",
+ "localization",
  "ui",
 ]
 
@@ -15079,6 +15103,7 @@ dependencies = [
  "http_client",
  "itertools 0.14.0",
  "language",
+ "localization",
  "log",
  "markdown",
  "menu",
@@ -15491,6 +15516,7 @@ dependencies = [
  "language_tools",
  "languages",
  "line_ending_selector",
+ "localization",
  "log",
  "markdown",
  "markdown_preview",

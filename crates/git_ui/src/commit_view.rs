@@ -291,6 +291,7 @@ impl CommitView {
             .map(|worktree| worktree.read(cx).id());
 
         let repository_clone = repository.clone();
+        let ui_language = localization::current_language(cx);
 
         cx.spawn_in(window, async move |this, cx| {
             let mut binary_buffer_ids: HashSet<language::BufferId> = HashSet::default();
@@ -309,7 +310,7 @@ impl CommitView {
                         .is_some_and(|text| is_binary_content(text.as_bytes()));
 
                 let new_text = if is_binary {
-                    "(binary file not shown)".to_string()
+                    localization::translate(ui_language, "(binary file not shown)").to_string()
                 } else {
                     raw_new_text
                 };
@@ -662,7 +663,7 @@ impl CommitView {
                     )
                     .when(self.stash.is_none(), |this| {
                         this.child(
-                            Button::new("sha", "Commit SHA")
+                            Button::localized("sha", "Commit SHA")
                                 .start_icon(
                                     Icon::new(copy_icon)
                                         .size(IconSize::Small)
@@ -822,7 +823,7 @@ impl CommitView {
 
     fn stash_action<AsyncFn>(
         workspace: &mut Workspace,
-        str_action: &str,
+        str_action: &'static str,
         window: &mut Window,
         cx: &mut App,
         callback: AsyncFn,
@@ -844,11 +845,20 @@ impl CommitView {
             return;
         };
         let sha = commit_view.read(cx).commit.sha.clone();
+        let message = match localization::current_language(cx) {
+            localization::UiLanguage::ChineseSimplified => {
+                format!("{} stash@{{{}}}？", localization::t(cx, str_action), stash)
+            }
+            localization::UiLanguage::English => format!("{} stash@{{{}}}?", str_action, stash),
+        };
         let answer = window.prompt(
             PromptLevel::Info,
-            &format!("{} stash@{{{}}}?", str_action, stash),
+            &message,
             None,
-            &[str_action, "Cancel"],
+            &[
+                localization::prompt_button(cx, str_action),
+                localization::prompt_button(cx, "Cancel"),
+            ],
             cx,
         );
 
@@ -1317,7 +1327,7 @@ impl Render for CommitViewToolbar {
                 this.child(
                     IconButton::new("show-in-git-graph", IconName::GitGraph)
                         .icon_size(IconSize::Small)
-                        .tooltip(Tooltip::text("Show in Git Graph"))
+                        .tooltip(Tooltip::localized_text("Show in Git Graph"))
                         .on_click(move |_, window, cx| {
                             window.dispatch_action(
                                 Box::new(crate::git_graph::OpenAtCommit {
@@ -1332,7 +1342,14 @@ impl Render for CommitViewToolbar {
 
                     IconButton::new("view_on_provider", icon)
                         .icon_size(IconSize::Small)
-                        .tooltip(Tooltip::text(format!("View on {}", provider_name)))
+                        .tooltip(Tooltip::text(match localization::current_language(cx) {
+                            localization::UiLanguage::ChineseSimplified => {
+                                format!("在 {} 上查看", provider_name)
+                            }
+                            localization::UiLanguage::English => {
+                                format!("View on {}", provider_name)
+                            }
+                        }))
                         .on_click(move |_, _, cx| cx.open_url(&url))
                 }))
             })

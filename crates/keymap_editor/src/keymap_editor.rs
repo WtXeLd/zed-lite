@@ -555,7 +555,7 @@ impl KeymapEditor {
 
         let filter_editor = cx.new(|cx| {
             let mut editor = Editor::single_line(window, cx);
-            editor.set_placeholder_text("Filter action names…", window, cx);
+            editor.set_localized_placeholder_text("Filter action names…", window, cx);
             editor
         });
 
@@ -1089,27 +1089,27 @@ impl KeymapEditor {
             let context_menu = ContextMenu::build(window, cx, |menu, _window, _cx| {
                 menu.context(self.focus_handle.clone())
                     .when(selected_binding_is_unmapped, |this| {
-                        this.action("Create", Box::new(CreateBinding))
+                        this.action_localized("Create", Box::new(CreateBinding))
                     })
-                    .action_disabled_when(
+                    .action_disabled_when_localized(
                         selected_binding_is_non_interactable,
                         "Edit",
                         Box::new(EditBinding),
                     )
-                    .action_disabled_when(
+                    .action_disabled_when_localized(
                         selected_binding_is_non_interactable,
                         "Delete",
                         Box::new(DeleteBinding),
                     )
                     .separator()
-                    .action("Copy Action", Box::new(CopyAction))
-                    .action_disabled_when(
+                    .action_localized("Copy Action", Box::new(CopyAction))
+                    .action_disabled_when_localized(
                         selected_binding_has_no_context,
                         "Copy Context",
                         Box::new(CopyContext),
                     )
                     .separator()
-                    .action_disabled_when(
+                    .action_disabled_when_localized(
                         selected_binding_has_no_context,
                         "Show Matching Keybindings",
                         Box::new(ShowMatchingKeybinds),
@@ -1152,7 +1152,7 @@ impl KeymapEditor {
             base_button_style(index, IconName::Warning)
                 .icon_color(Color::Warning)
                 .disabled(true)
-                .tooltip(Tooltip::text("This action is unbound"))
+                .tooltip(Tooltip::localized_text("This action is unbound"))
         } else if self.filter_state != FilterState::Conflicts
             && let Some(conflict) = conflict
         {
@@ -1222,7 +1222,12 @@ impl KeymapEditor {
                 })
                 .when(
                     self.show_hover_menus && !self.context_menu_deployed(),
-                    |this| this.tooltip(Tooltip::for_action_title("Edit Keybinding", &EditBinding)),
+                    |this| {
+                        this.tooltip(Tooltip::for_localized_action_title(
+                            "Edit Keybinding",
+                            &EditBinding,
+                        ))
+                    },
                 )
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.select_index(index, None, window, cx);
@@ -1612,7 +1617,7 @@ impl KeymapEditor {
 
                         menu = menu
                             .context(focus_handle.clone())
-                            .header("Filters")
+                            .header_localized("Filters")
                             .map(add_filter(
                                 "Conflicts",
                                 matches!(filter_state, FilterState::Conflicts),
@@ -1630,7 +1635,7 @@ impl KeymapEditor {
                                 None,
                             ))
                             .separator()
-                            .header("Categories")
+                            .header_localized("Categories")
                             .map(add_filter(
                                 "User",
                                 source_filters.user,
@@ -1677,7 +1682,7 @@ impl KeymapEditor {
                         self.keybinding_conflict_state.any_user_binding_conflicts(),
                         |this| this.indicator(Indicator::dot().color(Color::Warning)),
                     ),
-                Tooltip::text("Filters"),
+                Tooltip::localized_text("Filters"),
             );
 
         fn add_filter(
@@ -2067,7 +2072,7 @@ impl Render for KeymapEditor {
                                         self.render_filter_dropdown(focus_handle, cx)
                                     )
                                     .child(
-                                        Button::new("edit-in-json", "Edit in JSON")
+                                        Button::localized("edit-in-json", "Edit in JSON")
                                             .style(ButtonStyle::Subtle)
                                             .key_binding(
                                                 ui::KeyBinding::for_action_in(&zed_actions::OpenKeymapFile, &focus_handle, cx)
@@ -2081,7 +2086,7 @@ impl Render for KeymapEditor {
                                             })
                                     )
                                     .child(
-                                        Button::new("create", "Create Keybinding")
+                                        Button::localized("create", "Create Keybinding")
                                             .style(ButtonStyle::Outlined)
                                             .key_binding(
                                                 ui::KeyBinding::for_action_in(&OpenCreateKeybindingModal, &focus_handle, cx)
@@ -2329,7 +2334,7 @@ impl Render for KeymapEditor {
                                             },
                                         )
                                         .when(is_unbound_by_unbind, |row| {
-                                            row.tooltip(Tooltip::text("This action is unbound"))
+                                            row.tooltip(Tooltip::localized_text("This action is unbound"))
                                         }),
                                 )
                                 .border_2()
@@ -2497,8 +2502,8 @@ impl KeybindingEditorModal {
             .new(|cx| KeystrokeInput::new(editing_keybind.keystrokes().map(Vec::from), window, cx));
 
         let context_editor: Entity<InputField> = cx.new(|cx| {
-            let input = InputField::new(window, cx, "Keybinding Context")
-                .label("Edit Context")
+            let input = InputField::localized(window, cx, "Keybinding Context")
+                .localized_label("Edit Context")
                 .label_size(LabelSize::Default);
 
             if let Some(context) = editing_keybind
@@ -2553,8 +2558,8 @@ impl KeybindingEditorModal {
                 .collect();
 
             let editor = cx.new(|cx| {
-                let input = InputField::new(window, cx, "Type an action name")
-                    .label("Action")
+                let input = InputField::localized(window, cx, "Type an action name")
+                    .localized_label("Action")
                     .label_size(LabelSize::Default);
 
                 let editor_entity = input.editor();
@@ -3091,7 +3096,7 @@ impl Render for KeybindingEditorModal {
                                     )
                                 })
                                 .when(self.creating, |this| {
-                                    this.child(Label::new("Create Keybinding"))
+                                    this.child(Label::localized("Create Keybinding"))
                                 }),
                         ),
                     )
@@ -3108,7 +3113,7 @@ impl Render for KeybindingEditorModal {
                                 .child(
                                     v_flex()
                                         .gap_1()
-                                        .child(Label::new("Edit Keystroke"))
+                                        .child(Label::localized("Edit Keystroke"))
                                         .child(self.keybind_editor.clone())
                                         .child(h_flex().gap_px().when(
                                             matching_bindings_count > 0,
@@ -3134,7 +3139,7 @@ impl Render for KeybindingEditorModal {
                                                         .color(Color::Muted),
                                                 )
                                                 .child(
-                                                    Button::new("show_matching", "View")
+                                                    Button::localized("show_matching", "View")
                                                         .label_size(LabelSize::Small)
                                                         .end_icon(
                                                             Icon::new(IconName::ArrowUpRight)
@@ -3156,7 +3161,7 @@ impl Render for KeybindingEditorModal {
                                     this.child(
                                         v_flex()
                                             .gap_1()
-                                            .child(Label::new("Edit Arguments"))
+                                            .child(Label::localized("Edit Arguments"))
                                             .child(editor),
                                     )
                                 })
@@ -3175,14 +3180,14 @@ impl Render for KeybindingEditorModal {
                             h_flex()
                                 .gap_1()
                                 .child(
-                                    Button::new("cancel", "Cancel")
+                                    Button::localized("cancel", "Cancel")
                                         .on_click(cx.listener(|_, _, _, cx| cx.emit(DismissEvent))),
                                 )
-                                .child(Button::new("save-btn", "Save").on_click(cx.listener(
-                                    |this, _event, _window, cx| {
+                                .child(Button::localized("save-btn", "Save").on_click(
+                                    cx.listener(|this, _event, _window, cx| {
                                         this.save_or_display_error(cx);
-                                    },
-                                ))),
+                                    }),
+                                )),
                         ),
                     ),
             )
@@ -3382,7 +3387,7 @@ impl ActionArgumentsEditor {
             editor.set_text(arguments, window, cx);
         } else {
             // TODO: default value from schema?
-            editor.set_placeholder_text("Action Arguments", window, cx);
+            editor.set_localized_placeholder_text("Action Arguments", window, cx);
         }
     }
 

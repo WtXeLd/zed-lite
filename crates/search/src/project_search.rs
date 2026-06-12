@@ -563,21 +563,26 @@ impl Render for ProjectSearchView {
         } else {
             let model = self.entity.read(cx);
 
-            let heading_text = match model.search_state {
-                SearchState::Running(SearchActivity::WaitingForScan) => "Loading project…",
-                SearchState::Running(SearchActivity::Searching) => "Searching…",
-                SearchState::Completed(SearchCompletion::NoResults) => "No Results",
-                _ => "Search All Files",
-            };
-
-            let heading_text = div()
-                .justify_center()
-                .child(Label::new(heading_text).size(LabelSize::Large));
+            let heading_text = div().justify_center().child(
+                match model.search_state {
+                    SearchState::Running(SearchActivity::WaitingForScan) => {
+                        Label::localized("Loading project…")
+                    }
+                    SearchState::Running(SearchActivity::Searching) => {
+                        Label::localized("Searching…")
+                    }
+                    SearchState::Completed(SearchCompletion::NoResults) => {
+                        Label::localized("No Results")
+                    }
+                    _ => Label::localized("Search All Files"),
+                }
+                .size(LabelSize::Large),
+            );
 
             let page_content: Option<AnyElement> = match model.search_state {
                 SearchState::Idle => Some(self.landing_text_minor(cx).into_any_element()),
                 SearchState::Completed(SearchCompletion::NoResults) => Some(
-                    Label::new("No results found in this project for the provided query")
+                    Label::localized("No results found in this project for the provided query")
                         .size(LabelSize::Small)
                         .into_any_element(),
                 ),
@@ -982,7 +987,7 @@ impl ProjectSearchView {
 
         let query_editor = cx.new(|cx| {
             let mut editor = Editor::auto_height(1, 4, window, cx);
-            editor.set_placeholder_text("Search all files…", window, cx);
+            editor.set_localized_placeholder_text("Search all files…", window, cx);
             editor.set_use_autoclose(false);
             editor.set_use_selection_highlight(false);
             editor.set_text(query_text, window, cx);
@@ -1007,7 +1012,7 @@ impl ProjectSearchView {
         );
         let replacement_editor = cx.new(|cx| {
             let mut editor = Editor::auto_height(1, 4, window, cx);
-            editor.set_placeholder_text("Replace in project…", window, cx);
+            editor.set_localized_placeholder_text("Replace in project…", window, cx);
             if let Some(text) = replacement_text {
                 editor.set_text(text, window, cx);
             }
@@ -1037,7 +1042,7 @@ impl ProjectSearchView {
 
         let included_files_editor = cx.new(|cx| {
             let mut editor = Editor::single_line(window, cx);
-            editor.set_placeholder_text("Include: crates/**/*.toml", window, cx);
+            editor.set_localized_placeholder_text("Include: crates/**/*.toml", window, cx);
 
             editor
         });
@@ -1050,7 +1055,7 @@ impl ProjectSearchView {
 
         let excluded_files_editor = cx.new(|cx| {
             let mut editor = Editor::single_line(window, cx);
-            editor.set_placeholder_text("Exclude: vendor/*, *.lock", window, cx);
+            editor.set_localized_placeholder_text("Exclude: vendor/*, *.lock", window, cx);
 
             editor
         });
@@ -1326,13 +1331,19 @@ impl ProjectSearchView {
             let should_prompt_to_save = !skip_save_on_close && !will_autosave && is_dirty;
 
             let should_search = if should_prompt_to_save {
-                let options = &["Save", "Don't Save", "Cancel"];
                 let result_channel = this.update_in(cx, |_, window, cx| {
                     window.prompt(
                         gpui::PromptLevel::Warning,
-                        "Project search buffer contains unsaved edits. Do you want to save it?",
+                        &localization::t(
+                            cx,
+                            "Project search buffer contains unsaved edits. Do you want to save it?",
+                        ),
                         None,
-                        options,
+                        &[
+                            localization::prompt_button(cx, "Save"),
+                            localization::prompt_button(cx, "Don't Save"),
+                            localization::prompt_button(cx, "Cancel"),
+                        ],
                         cx,
                     )
                 })?;
@@ -1730,12 +1741,12 @@ impl ProjectSearchView {
         v_flex()
             .gap_1()
             .child(
-                Label::new("Hit enter to search. For more options:")
+                Label::localized("Hit enter to search. For more options:")
                     .color(Color::Muted)
                     .mb_2(),
             )
             .child(
-                Button::new("filter-paths", "Include/exclude specific paths")
+                Button::localized("filter-paths", "Include/exclude specific paths")
                     .start_icon(Icon::new(IconName::Filter).size(IconSize::Small))
                     .key_binding(KeyBinding::for_action_in(&ToggleFilters, &focus_handle, cx))
                     .on_click(|_event, window, cx| {
@@ -1743,7 +1754,7 @@ impl ProjectSearchView {
                     }),
             )
             .child(
-                Button::new("find-replace", "Find and replace")
+                Button::localized("find-replace", "Find and replace")
                     .start_icon(Icon::new(IconName::Replace).size(IconSize::Small))
                     .key_binding(KeyBinding::for_action_in(&ToggleReplace, &focus_handle, cx))
                     .on_click(|_event, window, cx| {
@@ -1751,7 +1762,7 @@ impl ProjectSearchView {
                     }),
             )
             .child(
-                Button::new("regex", "Match with regex")
+                Button::localized("regex", "Match with regex")
                     .start_icon(Icon::new(IconName::Regex).size(IconSize::Small))
                     .key_binding(KeyBinding::for_action_in(&ToggleRegex, &focus_handle, cx))
                     .on_click(|_event, window, cx| {
@@ -1759,7 +1770,7 @@ impl ProjectSearchView {
                     }),
             )
             .child(
-                Button::new("match-case", "Match case")
+                Button::localized("match-case", "Match case")
                     .start_icon(Icon::new(IconName::CaseSensitive).size(IconSize::Small))
                     .key_binding(KeyBinding::for_action_in(
                         &ToggleCaseSensitive,
@@ -1771,7 +1782,7 @@ impl ProjectSearchView {
                     }),
             )
             .child(
-                Button::new("match-whole-words", "Match whole words")
+                Button::localized("match-whole-words", "Match whole words")
                     .start_icon(Icon::new(IconName::WholeWord).size(IconSize::Small))
                     .key_binding(KeyBinding::for_action_in(
                         &ToggleWholeWord,
@@ -2339,7 +2350,7 @@ impl Render for ProjectSearchBar {
                 IconButton::new("project-search-filter-button", IconName::Filter)
                     .shape(IconButtonShape::Square)
                     .tooltip(|_window, cx| {
-                        Tooltip::for_action("Toggle Filters", &ToggleFilters, cx)
+                        Tooltip::for_localized_action("Toggle Filters", &ToggleFilters, cx)
                     })
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.toggle_filters(window, cx);
@@ -2471,7 +2482,7 @@ impl Render for ProjectSearchBar {
                     IconButton::new("project-search-opened-only", IconName::FolderSearch)
                         .shape(IconButtonShape::Square)
                         .toggle_state(self.is_opened_only_enabled(cx))
-                        .tooltip(Tooltip::text("Only Search Open Files"))
+                        .tooltip(Tooltip::localized_text("Only Search Open Files"))
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.toggle_opened_only(window, cx);
                         })),

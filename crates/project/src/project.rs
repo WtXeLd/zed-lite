@@ -2040,62 +2040,60 @@ impl Project {
                 language_server_id,
                 name,
                 message,
-            } => {
-                match message {
-                    proto::update_language_server::Variant::MetadataUpdated(update) => {
-                        self.lsp_store.update(cx, |lsp_store, _| {
-                            if let Some(capabilities) = update
-                                .capabilities
+            } => match message {
+                proto::update_language_server::Variant::MetadataUpdated(update) => {
+                    self.lsp_store.update(cx, |lsp_store, _| {
+                        if let Some(capabilities) = update
+                            .capabilities
+                            .as_ref()
+                            .and_then(|capabilities| serde_json::from_str(capabilities).ok())
+                        {
+                            lsp_store
+                                .lsp_server_capabilities
+                                .insert(*language_server_id, capabilities);
+                        }
+
+                        if let Some(language_server_status) = lsp_store
+                            .language_server_statuses
+                            .get_mut(language_server_id)
+                        {
+                            if let Some(binary) = &update.binary {
+                                language_server_status.binary = Some(LanguageServerBinary {
+                                    path: PathBuf::from(&binary.path),
+                                    arguments: binary
+                                        .arguments
+                                        .iter()
+                                        .map(OsString::from)
+                                        .collect(),
+                                    env: None,
+                                });
+                            }
+
+                            language_server_status.configuration = update
+                                .configuration
                                 .as_ref()
-                                .and_then(|capabilities| serde_json::from_str(capabilities).ok())
-                            {
-                                lsp_store
-                                    .lsp_server_capabilities
-                                    .insert(*language_server_id, capabilities);
-                            }
+                                .and_then(|config_str| serde_json::from_str(config_str).ok());
 
-                            if let Some(language_server_status) = lsp_store
-                                .language_server_statuses
-                                .get_mut(language_server_id)
-                            {
-                                if let Some(binary) = &update.binary {
-                                    language_server_status.binary = Some(LanguageServerBinary {
-                                        path: PathBuf::from(&binary.path),
-                                        arguments: binary
-                                            .arguments
-                                            .iter()
-                                            .map(OsString::from)
-                                            .collect(),
-                                        env: None,
-                                    });
-                                }
-
-                                language_server_status.configuration = update
-                                    .configuration
-                                    .as_ref()
-                                    .and_then(|config_str| serde_json::from_str(config_str).ok());
-
-                                language_server_status.workspace_folders = update
-                                    .workspace_folders
-                                    .iter()
-                                    .filter_map(|uri_str| lsp::Uri::from_str(uri_str).ok())
-                                    .collect();
-                            }
+                            language_server_status.workspace_folders = update
+                                .workspace_folders
+                                .iter()
+                                .filter_map(|uri_str| lsp::Uri::from_str(uri_str).ok())
+                                .collect();
+                        }
+                    });
+                }
+                proto::update_language_server::Variant::RegisteredForBuffer(update) => {
+                    if let Some(buffer_id) = BufferId::new(update.buffer_id).ok() {
+                        cx.emit(Event::LanguageServerBufferRegistered {
+                            buffer_id,
+                            server_id: *language_server_id,
+                            buffer_abs_path: PathBuf::from(&update.buffer_abs_path),
+                            name: name.clone(),
                         });
                     }
-                    proto::update_language_server::Variant::RegisteredForBuffer(update) => {
-                        if let Some(buffer_id) = BufferId::new(update.buffer_id).ok() {
-                            cx.emit(Event::LanguageServerBufferRegistered {
-                                buffer_id,
-                                server_id: *language_server_id,
-                                buffer_abs_path: PathBuf::from(&update.buffer_abs_path),
-                                name: name.clone(),
-                            });
-                        }
-                    }
-                    _ => (),
                 }
-            }
+                _ => (),
+            },
             LspStoreEvent::Notification(message) => cx.emit(Event::Toast {
                 notification_id: "lsp".into(),
                 message: message.clone(),
@@ -3895,7 +3893,6 @@ impl Completion {
         None
     }
 }
-
 
 #[cfg(feature = "full")]
 fn provide_inline_values(

@@ -710,7 +710,7 @@ impl OutlinePanel {
         cx.new(|cx| {
             let filter_editor = cx.new(|cx| {
                 let mut editor = Editor::single_line(window, cx);
-                editor.set_placeholder_text("Search buffer symbols…", window, cx);
+                editor.set_localized_placeholder_text("Search buffer symbols…", window, cx);
                 editor
             });
             let filter_update_subscription = cx.subscribe_in(
@@ -1451,20 +1451,20 @@ impl OutlinePanel {
 
         let context_menu = ContextMenu::build(window, cx, |menu, _, _| {
             menu.context(self.focus_handle.clone())
-                .action(
+                .action_localized(
                     ui::utils::reveal_in_file_manager_label(false),
                     Box::new(RevealInFileManager),
                 )
-                .action("Open in Terminal", Box::new(OpenInTerminal))
+                .action_localized("Open in Terminal", Box::new(OpenInTerminal))
                 .when(is_unfoldable, |menu| {
-                    menu.action("Unfold Directory", Box::new(UnfoldDirectory))
+                    menu.action_localized("Unfold Directory", Box::new(UnfoldDirectory))
                 })
                 .when(is_foldable, |menu| {
-                    menu.action("Fold Directory", Box::new(FoldDirectory))
+                    menu.action_localized("Fold Directory", Box::new(FoldDirectory))
                 })
                 .separator()
-                .action("Copy Path", Box::new(zed_actions::workspace::CopyPath))
-                .action(
+                .action_localized("Copy Path", Box::new(zed_actions::workspace::CopyPath))
+                .action_localized(
                     "Copy Relative Path",
                     Box::new(zed_actions::workspace::CopyRelativePath),
                 )
@@ -2029,10 +2029,7 @@ impl OutlinePanel {
 
         if let Some(working_directory) = working_directory {
             window.dispatch_action(
-                workspace::OpenTerminal {
-                    working_directory,
-                }
-                .boxed_clone(),
+                workspace::OpenTerminal { working_directory }.boxed_clone(),
                 cx,
             )
         }
@@ -4645,7 +4642,7 @@ impl OutlinePanel {
                     h_flex()
                         .gap_1()
                         .justify_center()
-                        .child(Label::new("Toggle Panel With").color(Color::Muted))
+                        .child(Label::localized("Toggle Panel With").color(Color::Muted))
                         .child({
                             let key_binding = match self.position(window, cx) {
                                 DockPosition::Left => {
@@ -4845,7 +4842,7 @@ impl OutlinePanel {
                         this.child(
                             IconButton::new("clear_filter", IconName::Close)
                                 .shape(IconButtonShape::Square)
-                                .tooltip(Tooltip::text("Clear Filter"))
+                                .tooltip(Tooltip::localized_text("Clear Filter"))
                                 .on_click(cx.listener(|outline_panel, _, window, cx| {
                                     outline_panel.filter_editor.update(cx, |editor, cx| {
                                         editor.set_text("", window, cx);
@@ -5139,7 +5136,7 @@ impl Render for OutlinePanel {
                         .gap_0p5()
                         .border_b_1()
                         .border_color(cx.theme().colors().border_variant)
-                        .child(Label::new("Searching:").color(Color::Muted))
+                        .child(Label::localized("Searching:").color(Color::Muted))
                         .child(Label::new(query_text)),
                 )
             })

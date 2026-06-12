@@ -206,19 +206,25 @@ impl HeadlineSize {
 pub struct Headline {
     size: HeadlineSize,
     text: SharedString,
+    localize_text: bool,
     color: Color,
 }
 
 impl RenderOnce for Headline {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let ui_font = theme::theme_settings(cx).ui_font(cx).clone();
+        let text = if self.localize_text {
+            localization::t_shared(cx, self.text)
+        } else {
+            self.text
+        };
 
         div()
             .font(ui_font)
             .line_height(self.size.line_height())
             .text_size(self.size.rems())
             .text_color(cx.theme().colors().text)
-            .child(self.text)
+            .child(text)
     }
 }
 
@@ -228,6 +234,16 @@ impl Headline {
         Self {
             size: HeadlineSize::default(),
             text: text.into(),
+            localize_text: false,
+            color: Color::default(),
+        }
+    }
+
+    pub fn localized(text: &'static str) -> Self {
+        Self {
+            size: HeadlineSize::default(),
+            text: text.into(),
+            localize_text: true,
             color: Color::default(),
         }
     }

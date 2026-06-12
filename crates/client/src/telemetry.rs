@@ -397,7 +397,6 @@ impl Telemetry {
         drop(state);
     }
 
-
     pub fn log_edit_event(self: &Arc<Self>, environment: &'static str, is_via_ssh: bool) {
         static LAST_EVENT_TIME: Mutex<Option<Instant>> = Mutex::new(None);
 

@@ -57,9 +57,7 @@ where
 
                 self.encoding_buffer.clear();
                 self.encoding_buffer.shrink_to(MAX_BUFFER_LEN);
-                self.stream
-                    .send(WireMessage::Binary(buffer))
-                    .await?;
+                self.stream.send(WireMessage::Binary(buffer)).await?;
             }
             Message::Ping => {
                 self.stream.send(WireMessage::Ping(Vec::new())).await?;

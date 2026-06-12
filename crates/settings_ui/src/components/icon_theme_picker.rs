@@ -81,6 +81,10 @@ impl PickerDelegate for IconThemePickerDelegate {
         "Search icon themes…".into()
     }
 
+    fn localized_placeholder_text(&self) -> Option<&'static str> {
+        Some("Search icon themes…")
+    }
+
     fn update_matches(
         &mut self,
         query: String,
